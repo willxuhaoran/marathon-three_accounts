@@ -3173,6 +3173,7 @@
 
       container.innerHTML = weekDates.map((date, index) => {
         const dayPlan = weekPlan.days[index] || '';
+        const rawPlan = (weekPlan.daysRaw && weekPlan.daysRaw[index]) || '';
         const training = trainings.find(t => t.date === date);
         const isToday = date === today;
         const isPast = new Date(date) < new Date(today);
@@ -3194,6 +3195,13 @@
             planDetails = dayPlan;
             const km = dayPlan.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
             planDistance = km ? parseFloat(km[1]) : 0;
+          }
+          if (rawPlan) {
+            // 有 PDF 原文：优先完整展示（类型徽章按原文识别）
+            planType = guessPlanType(rawPlan) || planType;
+            planDetails = rawPlan;
+            const kmr = rawPlan.match(/(\d+(?:\.\d+)?)\s*[-~]\s*(\d+)\s*[kK㎞公里]/) || rawPlan.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
+            if (kmr) planDistance = kmr[2] ? Math.round((parseFloat(kmr[1]) + parseFloat(kmr[2])) / 2) : parseFloat(kmr[1]);
           }
           plannedDistance += planDistance;
         }
@@ -3322,7 +3330,7 @@
       const idx = getWeekDates(0).indexOf(date);
       const typeEl = document.getElementById('trainingType');
       if (plan && plan.days && idx >= 0 && !typeEl.value) {
-        const g = guessPlanType(plan.days[idx] || '');
+        const g = guessPlanType((plan.daysRaw && plan.daysRaw[idx]) || plan.days[idx] || '');
         if (g) { typeEl.value = g; renderTypeTip.call(typeEl); }
       }
       document.getElementById('section-training').classList.add('expanded');
@@ -3354,6 +3362,7 @@
       // Priority: PDF data > Template > Custom
       if (uploadedPdfData && uploadedPdfData.days) {
         weekPlan.days = uploadedPdfData.days;
+        weekPlan.daysRaw = uploadedPdfData.daysRaw || null;
         weekPlan.template = 'PDF导入计划';
         uploadedPdfData = null;
         clearPdfUpload();
@@ -3405,7 +3414,7 @@
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
           type: t ? t.type : '—',
-          plan: (plan && plan.days && plan.days[i]) ? plan.days[i] : '',
+          plan: (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '',
           actual,
           extra: t && t.extra ? t.extra : '无',
           notes: t && t.notes ? t.notes : ''
@@ -3683,8 +3692,9 @@
         const preview = document.getElementById('parsedPlanPreview');
         preview.innerHTML = parsedPlan.days.map((day, i) => {
           const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+          const raw = (parsedPlan.daysRaw && parsedPlan.daysRaw[i]) || '';
           return `<div style="margin: 8px 0; padding: 8px; background: var(--surface-light); border-radius: 6px;">
-            <strong>${dayNames[i]}</strong>: ${day || '休息日'}
+            <strong>${dayNames[i]}</strong>: ${raw || day || '休息日'}
           </div>`;
         }).join('');
 
@@ -3701,6 +3711,7 @@
 
     function parseTrainingPlan(text) {
       const days = ['', '', '', '', '', '', ''];
+      const daysRaw = ['', '', '', '', '', '', ''];
       
       // Clean text for better parsing
       text = text.replace(/\s+/g, ' ').trim();
@@ -3715,6 +3726,7 @@
           if (dayNumMatch) {
             const dayIndex = parseInt(dayNumMatch[1]) - 1;
             if (dayIndex >= 0 && dayIndex < 7) {
+              daysRaw[dayIndex] = match.replace(/^DAY\s*\d+[/\s:]*/i, '').trim();
               let trainingInfo = '';
               
               // Extract distance range (e.g., "12-14km" or "12~14km")
@@ -3827,7 +3839,7 @@
         }
       }
 
-      return { days, rawText: text };
+      return { days, daysRaw, rawText: text };
     }
 
     function clearPdfUpload() {
