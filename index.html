@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
       --primary: #00D26A;
@@ -1605,6 +1606,18 @@
               <p>今日已完成训练，继续保持！</p>
             </div>
           </div>
+        </div>
+
+        <!-- 智能识别（截图/文字） -->
+        <div class="card" style="padding:18px;margin-bottom:16px">
+          <h3 class="section-title">📸 智能识别（手表截图 / 文字）</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="dc-btn" style="background:var(--accent)" onclick="document.getElementById('watchShotInput').click()">上传手表截图</button>
+            <button class="dc-btn" onclick="parseAndFill(document.getElementById('smartText').value)">识别文字填入</button>
+          </div>
+          <input type="file" id="watchShotInput" accept="image/*" style="display:none" onchange="handleWatchScreenshot(this)">
+          <textarea class="form-input" id="smartText" rows="3" style="margin-top:10px" placeholder="点「上传手表截图」自动识别佳明/高驰数据；或在此粘贴输入文字，如：轻松跑 14.28km 用时1:16:14 配速5'20 心率138 —— 识别后自动填入下方表单，核对无误再保存"></textarea>
+          <div id="ocrProgress" style="margin-top:8px;font-size:12.5px;color:var(--text-secondary)"></div>
         </div>
 
         <!-- Form Sections -->
@@ -3266,6 +3279,98 @@
       }).length;
     }
 
+    /* ===== 智能识别：截图 OCR + 文字解析 ===== */
+    function parseSmartText(text) {
+      const r = {};
+      if (!text) return r;
+      const t = String(text).replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
+      // 日期：9月3日
+      const dm = t.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+      if (dm) {
+        const y = new Date().getFullYear();
+        r.date = `${y}-${String(dm[1]).padStart(2, '0')}-${String(dm[2]).padStart(2, '0')}`;
+      }
+      // 距离
+      const km = t.match(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km|k)\b/i);
+      if (km) r.distance = parseFloat(km[1]);
+      // 时长：带标签优先，其次裸 h:mm:ss
+      let dur = t.match(/(?:用时|耗时|时长|时间|duration|time|移动时间)\D{0,8}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+      if (!dur) dur = t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
+      if (dur) {
+        if (dur[3]) r.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]) + Math.round(parseInt(dur[3]) / 60);
+        else r.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]); // 带标签的 h:mm
+      }
+      if (!r.duration) {
+        // 裸 mm:ss（≥10分钟，排除配速写法）：如 45:03
+        const bare = t.match(/\b(\d{2,3}):(\d{2})\b(?!\s*(?:\/|每)\s*(?:km|公里))/i);
+        if (bare) r.duration = parseInt(bare[1]) + Math.round(parseInt(bare[2]) / 60);
+      }
+      if (!r.duration) {
+        const mm = t.match(/(\d{1,3})\s*(?:分钟|min)\b/i);
+        if (mm) r.duration = parseInt(mm[1]);
+      }
+      // 配速
+      const pace = t.match(/(?:配速|pace)\D{0,8}(\d{1,2})\s*[':：]\s*(\d{2})/i)
+        || t.match(/(\d{1,2})\s*'\s*(\d{2})\s*"?\s*(?:\/|每)\s*(?:km|公里)/i);
+      if (pace) r.pace = parseInt(pace[1]) + parseInt(pace[2]) / 60;
+      // 心率
+      const hr = t.match(/(?:平均心率|心率|hr|bpm)\D{0,6}(\d{2,3})/i)
+        || t.match(/(\d{2,3})\s*(?:bpm|次\/分)/i);
+      if (hr) r.hr = parseInt(hr[1]);
+      // 类型
+      r.type = guessPlanType(t) || '';
+      // 配速×距离 反推时长
+      if (!r.duration && r.pace && r.distance) r.duration = Math.round(r.pace * r.distance);
+      return r;
+    }
+
+    function parseAndFill(text) {
+      const r = parseSmartText(text || '');
+      const filled = [];
+      if (r.date) { setRecordDate(r.date); filled.push('日期'); }
+      if (r.type) { document.getElementById('trainingType').value = r.type; filled.push('类型'); }
+      if (r.distance) { document.getElementById('trainingDistance').value = r.distance; filled.push('距离'); }
+      if (r.duration) { document.getElementById('trainingDuration').value = r.duration; filled.push('时长'); }
+      if (r.hr) { document.getElementById('trainingHr').value = r.hr; filled.push('心率'); }
+      renderTypeTip.call(document.getElementById('trainingType'));
+      document.getElementById('section-training').classList.add('expanded');
+      if (filled.length) showToast(`已识别填入：${filled.join('、')}，请核对后保存`, 'success');
+      else showToast('没识别出有效数据，换个写法试试', 'error');
+    }
+
+    async function handleWatchScreenshot(input) {
+      const file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      if (typeof Tesseract === 'undefined') { showToast('OCR 组件未加载，请检查网络后重试', 'error'); return; }
+      const prog = document.getElementById('ocrProgress');
+      try {
+        prog.textContent = '正在加载识别引擎…';
+        const bmp = await createImageBitmap(file);
+        const scale = Math.min(3, Math.max(1.5, 2400 / bmp.width));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(bmp.width * scale);
+        cv.height = Math.round(bmp.height * scale);
+        const ctx = cv.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+        const res = await Tesseract.recognize(cv, 'chi_sim+eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') prog.textContent = `正在识别截图… ${Math.round(m.progress * 100)}%`;
+          }
+        });
+        const text = (res && res.data && res.data.text) || '';
+        prog.textContent = '';
+        if (!text.trim()) { showToast('没读出文字，换张更清晰的截图', 'error'); return; }
+        document.getElementById('smartText').value = text;
+        parseAndFill(text);
+      } catch (e) {
+        console.error(e);
+        prog.textContent = '';
+        showToast('截图识别失败，试试手动输入文字', 'error');
+      }
+    }
+
     /* ===== 记录日期（支持补记） ===== */
     function getRecordDate() {
       const el = document.getElementById('recordDate');
@@ -3317,7 +3422,7 @@
       if (/节奏|tempo/i.test(text)) return '节奏跑';
       if (/力量|核心|技术练习/.test(text)) return '力量训练';
       if (/耐力|长跑|长距离|lsd|稳定配速/i.test(text)) return '长跑';
-      if (/恢复|放松|慢跑|E跑/i.test(text)) return 'E跑';
+      if (/恢复|放松|慢跑|轻松|E跑/i.test(text)) return 'E跑';
       return '';
     }
 
