@@ -2346,7 +2346,10 @@
     }
 
     function getDateStr(date = new Date()) {
-      return date.toISOString().split('T')[0];
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
 
     function formatDate(dateStr) {
@@ -3280,47 +3283,133 @@
     }
 
     /* ===== 智能识别：截图 OCR + 文字解析 ===== */
-    function parseSmartText(text) {
-      const r = {};
-      if (!text) return r;
-      const t = String(text).replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
-      // 日期：9月3日
-      const dm = t.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
-      if (dm) {
-        const y = new Date().getFullYear();
-        r.date = `${y}-${String(dm[1]).padStart(2, '0')}-${String(dm[2]).padStart(2, '0')}`;
+    function hmToMin(s) {
+      const p = s.split(':').map(Number);
+      if (p.length === 3) return p[0] * 60 + p[1] + Math.round(p[2] / 60);
+      if (p[0] >= 10) return p[0] + Math.round(p[1] / 60); // mm:ss
+      return p[0] * 60 + p[1]; // h:mm
+    }
+
+    function grabLabeled(t, labels, valPat) {
+      for (const lab of labels) {
+        let m = t.match(new RegExp(lab + '[^0-9]{0,12}(' + valPat + ')', 'i'));
+        if (m) return m[1];
+        m = t.match(new RegExp('(' + valPat + ')[^0-9]{0,12}' + lab, 'i'));
+        if (m) return m[1];
       }
-      // 距离
-      const km = t.match(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km\b|k\b)/i);
-      if (km) r.distance = parseFloat(km[1]);
-      // 时长：带标签优先，其次裸 h:mm:ss
-      let dur = t.match(/(?:用时|耗时|时长|时间|duration|time|移动时间)\D{0,8}(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
-      if (!dur) dur = t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
-      if (dur) {
-        if (dur[3]) r.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]) + Math.round(parseInt(dur[3]) / 60);
-        else r.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]); // 带标签的 h:mm
+      return null;
+    }
+
+    function parseSmartText(text) {
+      const r = { extras: [] };
+      if (!text) return r;
+      const t = String(text).replace(/[’‘]/g, "'").replace(/[“”″]/g, '"');
+
+      // 日期（优先带年份）
+      let dm = t.match(/(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+      if (dm) {
+        r.date = `${dm[1]}-${String(dm[2]).padStart(2, '0')}-${String(dm[3]).padStart(2, '0')}`;
+      } else {
+        dm = t.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+        if (dm) r.date = `${new Date().getFullYear()}-${String(dm[1]).padStart(2, '0')}-${String(dm[2]).padStart(2, '0')}`;
+      }
+
+      // 距离：值在标签前优先；排除时间格式和过小值；兜底取最大 km 值（排除 km/h）
+      let dmat = t.match(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km)?[^0-9]{0,6}距离/i);
+      if (!dmat) dmat = t.match(/距离[^0-9]{0,6}(\d+(?:\.\d+)?)(?!\s*[:：])/i);
+      if (dmat && parseFloat(dmat[1]) >= 3) r.distance = parseFloat(dmat[1]);
+      if (!r.distance) {
+        const kmAll = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km(?!\/h)|k\b)/gi)].map(m => parseFloat(m[1]));
+        if (kmAll.length) r.distance = Math.max(...kmAll);
+      }
+
+      // 时长：标签优先；裸 h:mm:ss 取最后一个（总计 > 累计分段）
+      const durL = grabLabeled(t, ['运动时间', '移动时间', '用时', '耗时', '时长'], '\\d{1,2}:\\d{2}(?::\\d{2})?');
+      if (durL) r.duration = hmToMin(durL);
+      if (!r.duration) {
+        const hms = [...t.matchAll(/\b(\d{1,2}):(\d{2}):(\d{2})\b/g)];
+        if (hms.length) r.duration = hmToMin(hms[hms.length - 1][0]);
       }
       if (!r.duration) {
-        // 裸 mm:ss（≥10分钟，排除配速写法）：如 45:03
         const bare = t.match(/\b(\d{2,3}):(\d{2})\b(?!\s*(?:\/|每)\s*(?:km|公里))/i);
-        if (bare) r.duration = parseInt(bare[1]) + Math.round(parseInt(bare[2]) / 60);
+        if (bare) r.duration = hmToMin(bare[0]);
       }
       if (!r.duration) {
         const mm = t.match(/(\d{1,3})\s*(?:分钟|min\b)/i);
         if (mm) r.duration = parseInt(mm[1]);
       }
-      // 配速
-      const pace = t.match(/(?:配速|pace)\D{0,8}(\d{1,2})\s*[':：]\s*(\d{2})/i)
-        || t.match(/(\d{1,2})\s*'\s*(\d{2})\s*"?\s*(?:\/|每)\s*(?:km|公里)/i);
-      if (pace) r.pace = parseInt(pace[1]) + parseInt(pace[2]) / 60;
-      // 心率
-      const hr = t.match(/(?:平均心率|心率|hr|bpm)\D{0,6}(\d{2,3})/i)
-        || t.match(/(\d{2,3})\s*(?:bpm|次\/分)/i);
-      if (hr) r.hr = parseInt(hr[1]);
+
+      // 配速：总计行 > 平均配速（值在前优先）> 第一个 m'ss"
+      const paceOf = s => { const m = s.match(/(\d{1,2})\s*'\s*(\d{2})\s*"/); return m ? `${m[1]}'${m[2]}"` : null; };
+      const totLine = t.split('\n').find(l => /总计|合计/.test(l) && paceOf(l));
+      let paceStr = totLine ? paceOf(totLine) : null;
+      if (!paceStr) {
+        const pl = t.match(/(\d{1,2}\s*'\s*\d{2}\s*")[^0-9]{0,8}平均配速/)
+          || t.match(/平均配速[^0-9]{0,8}(\d{1,2}\s*'\s*\d{2}\s*")/);
+        if (pl) paceStr = paceOf(pl[1]);
+      }
+      if (!paceStr) paceStr = paceOf(t);
+      if (paceStr) {
+        const pm = paceStr.match(/(\d{1,2})'(\d{2})/);
+        r.pace = parseInt(pm[1]) + parseInt(pm[2]) / 60;
+        r.paceStr = paceStr;
+      }
+      // 最快1公里
+      const fast = t.match(/(\d{1,2}\s*'\s*\d{2}\s*")\s*(?:\/\s*km)?[^0-9]{0,8}最快/)
+        || t.match(/最快[^0-9]{0,10}(\d{1,2}\s*'\s*\d{2}\s*")/);
+      if (fast) r.fastest = fast[1].replace(/\s/g, '');
+
+      // 心率：平均（值在前优先）> bpm 单位 > 心率标签
+      const hrM = t.match(/(\d{2,3})\s*(?:bpm)?[^0-9]{0,6}平均心率/i)
+        || t.match(/平均心率[^0-9]{0,6}(\d{2,3})/)
+        || t.match(/(\d{2,3})\s*(?:bpm|次\/分)/i)
+        || t.match(/(\d{2,3})\s*(?:bpm)?[^0-9]{0,6}心率/i)
+        || t.match(/心率[^0-9]{0,6}(\d{2,3})/);
+      if (hrM) r.hr = parseInt(hrM[1]);
+      const hrMax = t.match(/心率[\s\S]{0,40}?最大[^0-9]{0,4}(\d{2,3})/) || t.match(/最大心率[^0-9]{0,4}(\d{2,3})/);
+      if (hrMax) r.hrMax = parseInt(hrMax[1]);
+
       // 类型
       r.type = guessPlanType(t) || '';
-      // 配速×距离 反推时长
+
+      // 时长反推
       if (!r.duration && r.pace && r.distance) r.duration = Math.round(r.pace * r.distance);
+
+      // ---- 分析扩展（进备注，服务周报） ----
+      const cad = t.match(/步频[\s\S]{0,20}?平均[^0-9]{0,4}(\d{2,3})/) || t.match(/(\d{2,3})\s*spm/i);
+      if (cad) r.extras.push(`步频${cad[1]}`);
+      const stride = t.match(/步幅(?!比)[^0-9]{0,15}(?:平均[^0-9]{0,4})?(\d{2,3})/);
+      if (stride) r.extras.push(`步幅${stride[1]}`);
+      const asc = t.match(/(\d{1,4})\s*m?[^0-9]{0,4}(?:累计上升|累计爬升|爬升)/)
+        || t.match(/(?:累计上升|累计爬升|爬升)[^0-9]{0,4}(\d{1,4})/)
+        || t.match(/(\d{1,4})\s*m[^0-9]{0,4}上升/)
+        || t.match(/上升[^0-9]{0,4}(\d{1,4})/);
+      if (asc) r.extras.push(`上升${asc[1]}m`);
+      let kcal = t.match(/(\d{3,5})\s*kcal/i);
+      if (!kcal) { const g = grabLabeled(t, ['卡路里', '热量'], '\\d{3,5}'); if (g) kcal = [null, g]; }
+      if (kcal) r.extras.push(`${kcal[1]}kcal`);
+      const teA = t.match(/(\d(?:\.\d)?)\s*有氧/) || t.match(/有氧(?:效果|TE)?[^0-9]{0,6}(\d(?:\.\d)?)/);
+      if (teA) r.extras.push(`有氧TE${teA[1]}`);
+      const teB = t.match(/(\d(?:\.\d)?)\s*无氧/) || t.match(/无氧(?:效果|TE)?[^0-9]{0,6}(\d(?:\.\d)?)/);
+      if (teB) r.extras.push(`无氧TE${teB[1]}`);
+      const tl = t.match(/(\d{2,4})\s*TL/);
+      if (tl) r.extras.push(`负荷${tl[1]}TL`);
+      const perf = t.match(/(\d{2,3})\s*%\s*[^0-9]{0,8}运动表现/) || t.match(/运动表现[^0-9]{0,8}(\d{2,3})/);
+      if (perf) r.extras.push(`运动表现${perf[1]}%`);
+
+      // 分段渐进（≥3 行"配速+心率"才生成，排除总计行）
+      const pairs = [];
+      t.split('\n').forEach(l => {
+        if (/总计|合计/.test(l)) return;
+        const pm = l.match(/(\d{1,2})\s*'\s*(\d{2})\s*"/);
+        if (!pm) return;
+        const hr = (l.match(/\d{2,3}/g) || []).map(Number).find(n => n >= 90 && n <= 200);
+        if (hr) pairs.push({ pace: `${pm[1]}'${pm[2]}"`, hr });
+      });
+      if (pairs.length >= 3) {
+        r.progress = `配速渐进 ${pairs[0].pace}→${pairs[pairs.length - 1].pace}｜心率渐进 ${pairs[0].hr}→${pairs[pairs.length - 1].hr}`;
+      }
+
       return r;
     }
 
@@ -3332,6 +3421,18 @@
       if (r.distance) { document.getElementById('trainingDistance').value = r.distance; filled.push('距离'); }
       if (r.duration) { document.getElementById('trainingDuration').value = r.duration; filled.push('时长'); }
       if (r.hr) { document.getElementById('trainingHr').value = r.hr; filled.push('心率'); }
+      // 分析数据 → 备注（仅当备注为空），并在识别区展示
+      const bits = [];
+      if (r.paceStr) bits.push(`均配${r.paceStr}` + (r.fastest ? `(最快${r.fastest})` : ''));
+      if (r.hr) bits.push(`均心率${r.hr}` + (r.hrMax ? `(最大${r.hrMax})` : ''));
+      bits.push(...r.extras);
+      if (r.progress) bits.push(r.progress);
+      if (bits.length) {
+        const notesEl = document.getElementById('trainingNotes');
+        if (!notesEl.value.trim()) { notesEl.value = bits.join(' '); filled.push('备注'); }
+        const prog = document.getElementById('ocrProgress');
+        if (prog) prog.textContent = '✅ ' + bits.join(' ');
+      }
       renderTypeTip.call(document.getElementById('trainingType'));
       document.getElementById('section-training').classList.add('expanded');
       if (filled.length) showToast(`已识别填入：${filled.join('、')}，请核对后保存`, 'success');
@@ -3354,6 +3455,19 @@
         const ctx = cv.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+        // 预处理：灰度 + 暗图反色 + 对比度拉伸（深色手表卡片 → 黑字白底）
+        const imgData = ctx.getImageData(0, 0, cv.width, cv.height);
+        const px = imgData.data;
+        let sum = 0, cnt = 0;
+        for (let i = 0; i < px.length; i += 40) { sum += (px[i] + px[i + 1] + px[i + 2]) / 3; cnt++; }
+        const invert = (sum / cnt) < 110;
+        for (let i = 0; i < px.length; i += 4) {
+          let g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+          if (invert) g = 255 - g;
+          g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
+          px[i] = px[i + 1] = px[i + 2] = g;
+        }
+        ctx.putImageData(imgData, 0, 0);
         const res = await Tesseract.recognize(cv, 'chi_sim+eng', {
           logger: m => {
             if (m.status === 'recognizing text') prog.textContent = `正在识别截图… ${Math.round(m.progress * 100)}%`;
