@@ -1474,6 +1474,9 @@
     .wk-table th { text-align: left; color: var(--text-secondary); font-weight: 600; padding: 8px; border-bottom: 1px solid var(--surface-lighter); white-space: nowrap; }
     .wk-table td { padding: 8px; border-bottom: 1px solid rgba(51,65,85,.5); vertical-align: top; line-height: 1.6; }
     .wk-table .wk-plan, .wk-table .wk-note { color: var(--text-secondary); }
+    /* 计划卡详情多行展示 + 日期输入暗色 */
+    .plan-details { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.55; }
+    #recordDate { color-scheme: dark; }
   </style>
 </head>
 <body>
@@ -1494,7 +1497,7 @@
     <nav class="nav-tabs">
       <button class="nav-tab active" data-tab="today">
         <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
-        今日
+        记录
       </button>
       <button class="nav-tab" data-tab="records">
         <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
@@ -1553,7 +1556,7 @@
           <div class="card-header">
             <span class="card-title">
               <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 5.28c-1.23-.37-2.22-1.17-2.8-2.18l-1-1.6c-.41-.65-1.11-1-1.84-1-.78 0-1.59.5-1.78 1.44S7 23 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3c1 1.15 2.41 2.01 4 2.34V23H19V9.28c-.64.61-1.39 1.04-1.5 1.5z"/></svg>
-              今日训练
+              <span id="summaryTitleText">今日训练</span>
             </span>
             <span class="training-type-badge" id="todayType">
               <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
@@ -1616,6 +1619,15 @@
             <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
           </div>
           <div class="form-section-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">📅 记录日期</label>
+                <input type="date" class="form-input" id="recordDate" onchange="changeRecordDate()">
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end">
+                <button type="button" id="backTodayBtn" class="dc-btn" style="background:var(--surface-light);color:var(--text);display:none" onclick="setRecordDate(getDateStr())">回到今天</button>
+              </div>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">训练类型</label>
@@ -2316,6 +2328,8 @@
       const today =new Date();
       const options = { month: 'long', day: 'numeric', weekday: 'long' };
       document.getElementById('currentDate').textContent = today.toLocaleDateString('zh-CN', options);
+      const rd = document.getElementById('recordDate');
+      if (rd && !rd.value) rd.value = getDateStr();
     }
 
     function getDateStr(date = new Date()) {
@@ -2439,7 +2453,7 @@
 
     // Save All Records
     function saveAllRecords() {
-      const today = getDateStr();
+      const today = getRecordDate();
 
       // Training
       const trainingType = document.getElementById('trainingType').value;
@@ -2591,10 +2605,10 @@
         saveToStorage('body', bodies);
       }
 
-      showToast('保存成功', 'success');
-      loadTodayData();
+      showToast(`已保存 ${today.slice(5).replace('-', '月')}日 的记录`, 'success');
+      loadTodayData(today);
       loadWeekPlan();
-      coachAfterSave(trainingType, savedDistance, savedDuration);
+      coachAfterSave(trainingType, savedDistance, savedDuration, today);
       clearForms();
     }
 
@@ -2625,8 +2639,11 @@
     }
 
     // Load Today Data
-    function loadTodayData() {
-      const today = getDateStr();
+    function loadTodayData(dateStr) {
+      const today = dateStr || getDateStr();
+      const isToday = today === getDateStr();
+      const titleEl = document.getElementById('summaryTitleText');
+      if (titleEl) titleEl.textContent = isToday ? '今日训练' : `${today.slice(5).replace('-', '月')}日 训练（补记）`;
       const trainings = loadFromStorage('training');
       const todayTraining = trainings.find(t => t.date === today);
 
@@ -3165,10 +3182,19 @@
         let planDetails = '休息日';
 
         if (dayPlan && dayPlan !== '休息') {
-          const parts = dayPlan.split('-');
-          planType = parts[0];
-          planDistance = parseFloat(parts[1]) || 0;
-          planDetails = `${planDistance}km`;
+          const m = dayPlan.match(/^(.+?)-(\d+(?:\.\d+)?)-(\d+)$/);
+          if (m) {
+            // 模板格式：类型-距离-时长
+            planType = m[1];
+            planDistance = parseFloat(m[2]) || 0;
+            planDetails = `${planDistance}km`;
+          } else {
+            // PDF 原文：完整展示计划内容
+            planType = guessPlanType(dayPlan) || '训练';
+            planDetails = dayPlan;
+            const km = dayPlan.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
+            planDistance = km ? parseFloat(km[1]) : 0;
+          }
           plannedDistance += planDistance;
         }
 
@@ -3232,10 +3258,76 @@
       }).length;
     }
 
+    /* ===== 记录日期（支持补记） ===== */
+    function getRecordDate() {
+      const el = document.getElementById('recordDate');
+      return (el && el.value) || getDateStr();
+    }
+
+    function setRecordDate(d) {
+      document.getElementById('recordDate').value = d;
+      changeRecordDate();
+    }
+
+    function changeRecordDate() {
+      const d = getRecordDate();
+      const isToday = d === getDateStr();
+      document.getElementById('backTodayBtn').style.display = isToday ? 'none' : 'inline-block';
+      loadTodayData(d);
+      fillTrainingForm(d);
+    }
+
+    function fillTrainingForm(date) {
+      const t = loadFromStorage('training').find(x => x.date === date);
+      const set = (id, v) => { document.getElementById(id).value = v; };
+      if (t) {
+        set('trainingType', t.type || '');
+        set('trainingDistance', t.distance || '');
+        set('trainingDuration', t.duration || '');
+        set('trainingRpe', t.rpe || 5);
+        document.getElementById('rpeValue').textContent = t.rpe || 5;
+        set('trainingHr', t.hr || '');
+        set('trainingCompletion', t.completion || '按计划完成');
+        set('trainingExtra', t.extra || '');
+        set('trainingWeather', t.weather || '');
+        set('trainingNotes', t.notes || '');
+      } else {
+        ['trainingType', 'trainingDistance', 'trainingDuration', 'trainingHr', 'trainingExtra', 'trainingWeather', 'trainingNotes']
+          .forEach(id => set(id, ''));
+        set('trainingRpe', 5);
+        document.getElementById('rpeValue').textContent = '5';
+        set('trainingCompletion', '按计划完成');
+      }
+      renderTypeTip.call(document.getElementById('trainingType'));
+    }
+
+    // 从计划文本猜测训练类型（用于预填）
+    function guessPlanType(text) {
+      if (!text) return '';
+      if (/休息/.test(text)) return '休息日';
+      if (/间歇|重复|变速/.test(text)) return '间歇跑';
+      if (/节奏|tempo/i.test(text)) return '节奏跑';
+      if (/力量|核心|技术练习/.test(text)) return '力量训练';
+      if (/耐力|长跑|长距离|lsd|稳定配速/i.test(text)) return '长跑';
+      if (/恢复|放松|慢跑|E跑/i.test(text)) return 'E跑';
+      return '';
+    }
+
     function focusDay(date) {
-      // Switch to today tab and show the date
+      // 跳到记录页，按该天日期录入（支持补记）
       document.querySelector('[data-tab="today"]').click();
-      showToast('已切换到记录页面', 'success');
+      setRecordDate(date);
+      // 若当天还没记录，按计划文本预填训练类型
+      const plan = loadFromStorage('plan');
+      const idx = getWeekDates(0).indexOf(date);
+      const typeEl = document.getElementById('trainingType');
+      if (plan && plan.days && idx >= 0 && !typeEl.value) {
+        const g = guessPlanType(plan.days[idx] || '');
+        if (g) { typeEl.value = g; renderTypeTip.call(typeEl); }
+      }
+      document.getElementById('section-training').classList.add('expanded');
+      const isToday = date === getDateStr();
+      showToast(isToday ? '记录今天的训练吧' : `补记 ${date.slice(5).replace('-', '月')}日 的训练`, 'success');
     }
 
     function openPlanModal() {
@@ -3477,8 +3569,8 @@
       else { tip.style.display = 'none'; }
     }
 
-    function coachAfterSave(type, distance, duration) {
-      if (type === '长跑' && duration >= 90) {
+    function coachAfterSave(type, distance, duration, dateStr) {
+      if (type === '长跑' && duration >= 90 && dateStr === getDateStr()) {
         showDecouplingCard();
         showToast('长跑 ≥90min：顺手做解耦检查 👇', 'success');
       }
