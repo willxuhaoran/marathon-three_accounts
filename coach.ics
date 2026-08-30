@@ -1,0 +1,106 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//MarathonCoach//ThreeAccounts//CN
+CALSCALE:GREGORIAN
+X-WR-CALNAME:三本账复盘
+X-APPLE-CALENDAR-COLOR:#00D26A
+BEGIN:VEVENT
+UID:3accounts-mon@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260831T210000
+DTEND:20260831T211500
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:「三本账」复盘 · 周一
+DESCRIPTION:今天恢复跑：强度压住没？（提速 = 把省糖课练成烧糖课）\n明天 Day2 重复跑：阈值是第一杠杆，组间别吞间歇。\n——撞墙是功率缺口，不是燃料短缺。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:三本账复盘：今天恢复跑强度压住没？明天重复跑，组间别吞间歇。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-tue@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260901T210000
+DTEND:20260901T211500
+RRULE:FREQ=WEEKLY;BYDAY=TU
+SUMMARY:「三本账」复盘 · 周二
+DESCRIPTION:今天间歇质量如何？（完成感不如质量）\n明天 Day3 力量+恢复：结构账日——3 万次冲击后还剩多少输出，是练出来的。\n——练的是源头阈值，不是「燃脂神话」。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:三本账复盘：间歇质量如何？明天力量日，结构账全年不断。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-wed@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260902T210000
+DTEND:20260902T211500
+RRULE:FREQ=WEEKLY;BYDAY=WE
+SUMMARY:「三本账」复盘 · 周三
+DESCRIPTION:力量做了吗？恢复跑够慢吗？\n明天 Day4 变速跑：慢段真的慢，快段别抢组。\n——轻松跑的心率，决定周末长距离的质量。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:三本账复盘：力量+恢复完成了吗？明天变速跑，慢段真的慢。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-thu@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260903T210000
+DTEND:20260903T211500
+RRULE:FREQ=WEEKLY;BYDAY=TH
+SUMMARY:「三本账」复盘 · 周四
+DESCRIPTION:变速跑快慢段分明吗？\n明天 Day5 恢复跑：给周六长距离攒状态，心率压住。\n——补给、匀速、补水是「少预支」，不是新增供给。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:三本账复盘：变速跑完成质量？明天恢复跑，为周六彩排攒状态。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-fri@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260904T210000
+DTEND:20260904T211500
+RRULE:FREQ=WEEKLY;BYDAY=FR
+SUMMARY:「三本账」复盘 · 周五 · 明天长距离！
+DESCRIPTION:明天长距离 = 比赛彩排，今晚检查：\n① 胶备够了吗（每 20–25 min 一支，只用比赛日同款）\n② 水和电解质计划\n③ 明早早餐彩排（赛前 3h，100–150 g 碳水）\n装备摆好，早睡。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:明天长距离=比赛彩排！检查胶、水、早餐计划，装备摆好早睡。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-sat@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260905T210000
+DTEND:20260905T211500
+RRULE:FREQ=WEEKLY;BYDAY=SA
+SUMMARY:「三本账」复盘 · 周六 · 解耦检查！
+DESCRIPTION:今天补糖达标了吗（60–90 g/h）？肠胃反应如何？\n打开训练记录 App 做解耦检查：漂移 <5% 达标；>8–10% 先查补糖补水。\n今天不做 = 这周彩排白练一半。\nApp 路径：Desktop/马拉松训练/index.html
+URL:file:///Users/graciagao/Desktop/%E9%A9%AC%E6%8B%89%E6%9D%BE%E8%AE%AD%E7%BB%83/index.html
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:解耦检查！补糖达标了吗？打开训练记录 App 算漂移。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:3accounts-sun@marathon-coach
+DTSTAMP:20260830T120000Z
+DTSTART:20260830T210000
+DTEND:20260830T211500
+RRULE:FREQ=WEEKLY;BYDAY=SU
+SUMMARY:「三本账」周结 · 周日
+DESCRIPTION:本周三本账打分（1–5）：\n⚡ 能量账：补糖演练做了几次？\n🌡️ 热账：高温天按心率了吗？\n🦵 结构账：力量课都完成了吗？\n下周只改一个变量，写进训练备注。\n——后半程表现 = min(能量账，热账，结构账)。
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:周结：能量账/热账/结构账各打几分？下周只改一个变量。
+TRIGGER:-PT0M
+END:VALARM
+END:VEVENT
+END:VCALENDAR

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>马拉松后半程 · 三本账模型</title>
+<style>
+  :root{
+    --green:#00D26A; --orange:#FF6B35; --blue:#3B82F6; --red:#EF4444;
+    --bg:#0F172A; --surface:#1E293B; --surface2:#334155;
+    --text:#F8FAFC; --dim:#94A3B8; --line:#293548;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:
+      radial-gradient(1200px 500px at 85% -10%, rgba(0,210,106,.12), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255,107,53,.10), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    font-variant-numeric:tabular-nums;
+    min-height:100vh;
+  }
+  .page{max-width:1160px;margin:0 auto;padding:44px 32px 36px}
+
+  /* ---------- Hero ---------- */
+  .kicker{
+    display:inline-block;font-size:13px;letter-spacing:.28em;color:var(--green);
+    border:1px solid rgba(0,210,106,.4);border-radius:999px;padding:6px 16px;
+    text-transform:uppercase;animation:fadeUp .6s ease both;
+  }
+  h1{margin-top:20px;line-height:1.25;font-weight:800;animation:fadeUp .6s .1s ease both}
+  .myth{
+    font-size:clamp(26px,4vw,44px);color:#64748B;font-weight:700;
+    text-decoration:line-through;text-decoration-color:var(--red);text-decoration-thickness:4px;
+  }
+  .truth{
+    font-size:clamp(30px,4.6vw,52px);margin-top:6px;
+  }
+  .truth b{color:var(--green)}
+  .truth i{color:var(--orange);font-style:normal}
+  .sub{
+    margin-top:16px;max-width:860px;color:var(--dim);font-size:16px;line-height:1.8;
+    animation:fadeUp .6s .2s ease both;
+  }
+  .sub b{color:var(--text)}
+
+  /* ---------- Fuel compare ---------- */
+  .fuels{
+    margin-top:34px;display:grid;grid-template-columns:1fr 1fr;gap:18px;
+    animation:fadeUp .6s .3s ease both;
+  }
+  .fuel{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 24px;
+    position:relative;overflow:hidden;
+  }
+  .fuel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px}
+  .fuel.carb::before{background:var(--green)}
+  .fuel.fat::before{background:var(--blue)}
+  .fuel h3{font-size:20px;display:flex;align-items:baseline;gap:10px}
+  .fuel h3 .en{font-size:12px;color:var(--dim);letter-spacing:.2em}
+  .bar-row{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:13px;color:var(--dim)}
+  .bar-row .lab{width:64px;flex:none}
+  .bar{flex:1;height:12px;background:var(--surface2);border-radius:999px;overflow:hidden}
+  .bar > i{
+    display:block;height:100%;border-radius:999px;width:0;
+    animation:grow 1.2s .7s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .carb .bar.pwr > i{--w:96%;background:linear-gradient(90deg,#059669,var(--green))}
+  .carb .bar.cap > i{--w:18%;background:linear-gradient(90deg,#059669,var(--green))}
+  .fat  .bar.pwr > i{--w:28%;background:linear-gradient(90deg,#2563EB,var(--blue))}
+  .fat  .bar.cap > i{--w:97%;background:linear-gradient(90deg,#2563EB,var(--blue))}
+  .fuel .note{margin-top:12px;font-size:13.5px;color:var(--dim);line-height:1.7}
+  .fuel .note b{color:var(--text)}
+  .gap{
+    grid-column:1/-1;background:rgba(239,68,68,.08);border:1px dashed rgba(239,68,68,.45);
+    border-radius:16px;padding:14px 20px;font-size:15px;color:#FCA5A5;line-height:1.7;
+  }
+  .gap b{color:#fff}
+
+  /* ---------- Three accounts ---------- */
+  .formula{
+    margin-top:44px;text-align:center;animation:fadeUp .6s .4s ease both;
+  }
+  .formula .fx{
+    font-size:clamp(24px,3.4vw,38px);font-weight:800;letter-spacing:.02em;
+  }
+  .formula .fx span{color:var(--dim);font-weight:600}
+  .formula .fx .a{color:var(--green)} .formula .fx .b{color:var(--orange)} .formula .fx .c{color:var(--blue)}
+  .formula .hint{margin-top:8px;color:var(--dim);font-size:14px}
+  .accounts{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;animation:fadeUp .6s .5s ease both}
+  .acc{
+    background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;
+    border-top:4px solid var(--c);
+  }
+  .acc .ico{font-size:26px}
+  .acc h4{margin-top:8px;font-size:20px;color:var(--c)}
+  .acc .def{margin-top:6px;font-size:13.5px;color:var(--text);line-height:1.7;font-weight:600}
+  .acc ul{margin-top:10px;list-style:none}
+  .acc li{font-size:13.5px;color:var(--dim);line-height:1.75;padding-left:16px;position:relative}
+  .acc li::before{content:"";position:absolute;left:0;top:.72em;width:7px;height:7px;border-radius:50%;background:var(--c)}
+  .acc li b{color:var(--text)}
+
+  /* ---------- Chain ---------- */
+  .chain{
+    margin-top:34px;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:20px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    animation:fadeUp .6s .6s ease both;
+  }
+  .chain .tag{font-size:12px;color:var(--dim);letter-spacing:.15em;margin-right:6px}
+  .chip{
+    background:var(--surface2);border-radius:10px;padding:8px 14px;font-size:14.5px;font-weight:600;
+  }
+  .chip.hot{background:rgba(0,210,106,.14);color:var(--green);border:1px solid rgba(0,210,106,.35)}
+  .arrow{color:var(--dim);font-weight:800}
+  .chain .tail{margin-left:auto;font-size:12.5px;color:var(--dim)}
+
+  /* ---------- Actions ---------- */
+  .acts{margin-top:34px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;animation:fadeUp .6s .7s ease both}
+  .act{
+    background:linear-gradient(180deg,rgba(0,210,106,.07),transparent 70%),var(--surface);
+    border:1px solid var(--line);border-radius:16px;padding:20px 22px;
+  }
+  .act .num{
+    font-size:30px;font-weight:800;color:var(--green);opacity:.9;
+  }
+  .act h5{margin-top:4px;font-size:16.5px}
+  .act p{margin-top:8px;font-size:13.5px;color:var(--dim);line-height:1.75}
+  .act p b{color:var(--text)}
+
+  footer{
+    margin-top:34px;padding-top:18px;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    color:var(--dim);font-size:13px;animation:fadeUp .6s .8s ease both;
+  }
+  footer b{color:var(--text)}
+
+  @keyframes grow{to{width:var(--w)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @media (max-width:900px){
+    .fuels,.accounts,.acts{grid-template-columns:1fr}
+    .chain .tail{margin-left:0;width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HERO -->
+  <span class="kicker">马拉松后半程 · 认知模型</span>
+  <h1>
+    <span class="myth">把脂肪转成糖</span><br>
+    <span class="truth">撞墙，是<b>功率缺口</b>，不是<i>燃料短缺</i>。</span>
+  </h1>
+  <p class="sub">
+    哺乳动物没有乙醛酸循环——脂肪分解产物（乙酰CoA）<b>无法净合成葡萄糖</b>，这条生产线人体根本不产，练不出来也吃不出来。
+    脂肪唯一的帮法是<b>多烧自己、省下糖</b>。真正的问题是：全马消耗 ≈ 2,600–3,200 kcal，而糖原满箱只有 ≈ 2,000 kcal。
+  </p>
+
+  <!-- FUEL COMPARE -->
+  <div class="fuels">
+    <div class="fuel carb">
+      <h3>糖 <span class="en">CARB · 高功率小油箱</span></h3>
+      <div class="bar-row"><span class="lab">供能功率</span><div class="bar pwr"><i></i></div></div>
+      <div class="bar-row"><span class="lab">储量</span><div class="bar cap"><i></i></div></div>
+      <p class="note">撑得起马配，但 <b>约 2 小时见底</b>——它就是 30 km 前后那堵墙本身。</p>
+    </div>
+    <div class="fuel fat">
+      <h3>脂肪 <span class="en">FAT · 低功率大油箱</span></h3>
+      <div class="bar-row"><span class="lab">供能功率</span><div class="bar pwr"><i></i></div></div>
+      <div class="bar-row"><span class="lab">储量</span><div class="bar cap"><i></i></div></div>
+      <p class="note">近乎无限，但功率上限 ≈ <b>0.5–1 g/min</b>，且每升氧产能低约 10%——<b>补不上马配缺口</b>。</p>
+    </div>
+    <div class="gap">
+      ⚠️ 糖功率退场的那一刻，脂肪再多也只能支撑更慢的速度——<b>掉速是必然，早晚是选择</b>。能做的只有：让糖烧得更慢、油箱装得更满、边跑边加油。
+    </div>
+  </div>
+
+  <!-- FORMULA + THREE ACCOUNTS -->
+  <div class="formula">
+    <div class="fx">后半程表现 <span>= min(</span><span class="a">能量账</span><span>,</span> <span class="b">热账</span><span>,</span> <span class="c">结构账</span><span>)</span></div>
+    <div class="hint">任何一本提前透支，配速都得掉——前半程的任务是别预支。</div>
+  </div>
+  <div class="accounts">
+    <div class="acc" style="--c:var(--green)">
+      <div class="ico">⚡</div>
+      <h4>能量账</h4>
+      <p class="def">马配功率需求 vs 糖原储备 + 途中补糖 + 脂肪上限</p>
+      <ul>
+        <li>第一杠杆：<b>乳酸阈</b>——同样配速，烧糖更慢</li>
+        <li>赛前 3 天碳水 <b>8–10 g/kg</b> 顶满油箱</li>
+        <li>途中 <b>60–90 g/h</b>（葡:果 ≈ 2:1），边跑边加</li>
+      </ul>
+    </div>
+    <div class="acc" style="--c:var(--orange)">
+      <div class="ico">🌡️</div>
+      <h4>热账</h4>
+      <p class="def">产热 vs 散热——高温高湿下，它常先于糖原把你摁停</p>
+      <ul>
+        <li>补液按<b>出汗率</b>（体重差法），降幅 &lt;2–3%</li>
+        <li>热适应 <b>10–14 天</b>，夏训就是专项训练</li>
+        <li>高温天<b>按心率不按表</b>，别硬顶</li>
+      </ul>
+    </div>
+    <div class="acc" style="--c:var(--blue)">
+      <div class="ico">🦵</div>
+      <h4>结构账</h4>
+      <p class="def">肌肉-肌腱-神经耐久——3 万次冲击后还剩多少输出</p>
+      <ul>
+        <li>可观测代理：<b>同配速心率先上漂</b></li>
+        <li>总跑量 + <b>负重力量</b>，全年不断</li>
+        <li>长距离是最好的"抗散架"刺激</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- CAUSAL CHAIN -->
+  <div class="chain">
+    <span class="tag">真正的因果链</span>
+    <span class="chip hot">乳酸阈 ↑</span><span class="arrow">→</span>
+    <span class="chip">马配相对强度 ↓</span><span class="arrow">→</span>
+    <span class="chip">烧糖速率 ↓</span><span class="arrow">→</span>
+    <span class="chip">糖原更耐烧</span><span class="arrow">→</span>
+    <span class="chip hot">撞墙更晚</span>
+    <span class="tail">练的是源头阈值，不是"燃脂神话"</span>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="acts">
+    <div class="act">
+      <div class="num">01</div>
+      <h5>长距离 = 比赛彩排</h5>
+      <p>每 <b>20–25 min</b> 一支胶 + 水，只用比赛日同款；肠胃耐受是练出来的，不是比赛日天赋。</p>
+    </div>
+    <div class="act">
+      <div class="num">02</div>
+      <h5>前半程心率护栏</h5>
+      <p>配速浮动 ≤ <b>+5 s/km</b>，上坡按心率降速。补给、匀速、补水是<b>少预支</b>，不是新增供给。</p>
+    </div>
+    <div class="act">
+      <div class="num">03</div>
+      <h5>解耦检查</h5>
+      <p>前后半程「速度 ÷ 心率」漂移 <b>&lt;5% 达标</b>；&gt;8–10% 先查补糖补水，再查有氧底子。</p>
+    </div>
+  </div>
+
+  <footer>
+    <span>执行细节 → <b>比赛补给剧本与解耦检查.md</b>（SU26 文件夹）</span>
+    <span>一句话：别指望脂肪临场变糖——<b>把三本账都守住，后半程自然不掉速。</b></span>
+  </footer>
+
+</div>
+</body>
+</html>

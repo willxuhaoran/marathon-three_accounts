@@ -1,0 +1,3510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>马拉松训练记录</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #00D26A;
+      --primary-dark: #00B85C;
+      --secondary: #FF6B35;
+      --accent: #3B82F6;
+      --bg: #0F172A;
+      --surface: #1E293B;
+      --surface-light: #334155;
+      --surface-lighter: #475569;
+      --text: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --danger: #EF4444;
+      --warning: #F59E0B;
+      --success: #10B981;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 80px;
+    }
+
+    /* Header */
+    .header {
+      background: var(--surface);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid var(--surface-light);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg {
+      width: 22px;
+      height: 22px;
+      fill: white;
+    }
+
+    .logo-text {
+      font-weight: 700;
+      font-size: 18px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-date {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      background: var(--surface);
+      padding: 0 16px;
+      gap: 4px;
+      position: sticky;
+      top: 68px;
+      z-index: 99;
+    }
+
+    .nav-tab {
+      flex: 1;
+      padding: 14px 8px;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-tab svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .nav-tab.active {
+      color: var(--primary);
+    }
+
+    .nav-tab::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 3px;
+      background: var(--primary);
+      border-radius: 3px 3px 0 0;
+      transition: width 0.2s;
+    }
+
+    .nav-tab.active::after {
+      width: 28px;
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: 16px;
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section Title */
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--primary);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--surface-light);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 8px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stat-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .stat-icon.green { background: rgba(0, 210, 106, 0.15); }
+    .stat-icon.green svg { fill: var(--primary); }
+    .stat-icon.orange { background: rgba(255, 107, 53, 0.15); }
+    .stat-icon.orange svg { fill: var(--secondary); }
+    .stat-icon.blue { background: rgba(59, 130, 246, 0.15); }
+    .stat-icon.blue svg { fill: var(--accent); }
+    .stat-icon.purple { background: rgba(168, 85, 247, 0.15); }
+    .stat-icon.purple svg { fill: #A855F7; }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-feature-settings: 'tnum';
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .stat-trend {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .stat-trend.up { color: var(--primary); }
+    .stat-trend.down { color: var(--danger); }
+
+    /* Training Summary Card */
+    .training-summary {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-light) 100%);
+      border: 1px solid var(--surface-light);
+    }
+
+    .training-main {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 16px;
+    }
+
+    .training-stat {
+      text-align: center;
+    }
+
+    .training-stat .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary);
+      font-feature-settings: 'tnum';
+    }
+
+    .training-stat .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .training-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 210, 106, 0.15);
+      color: var(--primary);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .training-type-badge svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    /* Form Styles */
+    .form-section {
+      margin-bottom: 16px;
+    }
+
+    .form-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      background: var(--surface);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .form-section-header:hover {
+      background: var(--surface-light);
+    }
+
+    .form-section-header .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .form-section-header .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .form-section-header .icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .form-section-header .chevron {
+      width: 20px;
+      height: 20px;
+      fill: var(--text-secondary);
+      transition: transform 0.2s;
+    }
+
+    .form-section.expanded .chevron {
+      transform: rotate(180deg);
+    }
+
+    .form-section-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+      background: var(--surface);
+      border-radius: 0 0 12px 12px;
+      margin-top: -4px;
+    }
+
+    .form-section.expanded .form-section-content {
+      max-height: 1000px;
+      padding: 16px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group.full {
+      grid-column: span 2;
+    }
+
+    .form-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .form-input {
+      width: 100%;
+      background: var(--surface-light);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0, 210, 106, 0.1);
+    }
+
+    .form-input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    select.form-input {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394A3B8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 36px;
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Range Slider */
+    .range-container {
+      padding: 8px 0;
+    }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .range-slider {
+      width: 100%;
+      height: 6px;
+      background: var(--surface-light);
+      border-radius: 3px;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    .range-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: var(--primary);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 210, 106, 0.4);
+    }
+
+    .range-value {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-top: 8px;
+    }
+
+    /* Button */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: var(--surface-light);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface-lighter);
+    }
+
+    /* History List */
+    .history-item {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .history-item:hover {
+      background: var(--surface-light);
+    }
+
+    .history-item.deleted {
+      animation: slideOut 0.3s ease-out forwards;
+    }
+
+    @keyframes slideOut {
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    .history-date {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .history-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .history-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .history-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .history-stat {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .history-stat span {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .history-action {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: var(--surface-light);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .history-action:hover {
+      background: var(--surface-lighter);
+    }
+
+    .history-action.delete:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .history-action svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* Analysis Charts */
+    .chart-container {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+.chart-title {
+      font-weight: 600;
+    }
+
+    .chart-period {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chart-period-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      background: var(--surface-light);
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chart-period-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .chart-wrapper {
+      height: 200px;
+      position: relative;
+    }
+
+    /* Goals */
+    .goal-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .goal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .goal-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface-light);
+      padding: 6px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .goal-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .goal-deadline {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .goal-progress-ring {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 16px;
+      position: relative;
+    }
+
+    .goal-progress-ring svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .goal-progress-ring circle {
+      fill: none;
+      stroke-width: 8;
+    }
+
+    .goal-progress-ring .bg {
+      stroke: var(--surface-light);
+    }
+
+    .goal-progress-ring .progress {
+      stroke: var(--primary);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .goal-progress-ring.completed .progress {
+      stroke: var(--success);
+    }
+
+    .goal-progress-ring .center-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .goal-progress-ring .percentage {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .goal-progress-ring .remaining {
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+
+    .goal-values {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .goal-value {
+      text-align: center;
+    }
+
+    .goal-value .value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .goal-value .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 400px;
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: scale(0.9);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--surface-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: var(--surface-light);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      z-index: 1100;
+      transform: translateX(120%);
+      transition: transform 0.3s ease;
+    }
+
+    .toast.show {
+      transform: translateX(0);
+    }
+
+    .toast.success {
+      border-left: 4px solid var(--success);
+    }
+
+    .toast.error {
+      border-left: 4px solid var(--danger);
+    }
+
+    .toast-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    .toast.success .toast-icon { fill: var(--success); }
+    .toast.error .toast-icon { fill: var(--danger); }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .empty-state svg {
+      width: 80px;
+      height: 80px;
+      fill: var(--surface-light);
+      margin-bottom: 16px;
+    }
+
+    .empty-state .title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .empty-state .desc {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Analysis Summary */
+    .analysis-summary {
+      background: linear-gradient(135deg, rgba(0, 210, 106, 0.1), rgba(59, 130, 246, 0.1));
+      border: 1px solid var(--surface-light);
+    }
+
+    .analysis-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--surface-light);
+    }
+
+    .analysis-item:last-child {
+      border-bottom: none;
+    }
+
+    .analysis-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .analysis-icon.good { background: rgba(0, 210, 106, 0.15); }
+    .analysis-icon.good svg { fill: var(--primary); }
+    .analysis-icon.warning { background: rgba(245, 158, 11, 0.15); }
+    .analysis-icon.warning svg { fill: var(--warning); }
+    .analysis-icon.danger { background: rgba(239, 68, 68, 0.15); }
+    .analysis-icon.danger svg { fill: var(--danger); }
+
+    .analysis-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .analysis-content h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .analysis-content p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Filter */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .filter-btn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--surface-light);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    /* Date Navigation */
+    .date-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .date-nav-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: none;
+      background: var(--surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .date-nav-btn:hover {
+      background: var(--surface-light);
+      color: var(--text);
+    }
+
+    .date-nav-btn svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .date-nav .current-date {
+      font-size: 16px;
+      font-weight: 600;
+      min-width: 180px;
+      text-align: center;
+    }
+
+    /* Weekly Stats */
+    .weekly-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .weekly-stat {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .weekly-stat .value {
+      font-size: 24px;
+      font-weight: 700;
+      font-feature-settings: 'tnum';
+    }
+
+    .weekly-stat .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Injury Tag */
+    .injury-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .injury-tag.mild {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+    }
+
+    .injury-tag.moderate {
+      background: rgba(255, 107, 53, 0.15);
+      color: var(--secondary);
+    }
+
+    .injury-tag.severe {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+
+    /* Mood Selector */
+    .mood-selector {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mood-btn {
+      flex: 1;
+      padding: 12px 8px;
+      border-radius: 10px;
+      border: 2px solid var(--surface-light);
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .mood-btn:hover {
+      border-color: var(--surface-lighter);
+    }
+
+    .mood-btn.selected {
+      border-color: var(--primary);
+      background: rgba(0, 210, 106, 0.1);
+    }
+
+    .mood-btn .emoji {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .mood-btn .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Water Tracker */
+    .water-tracker {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .water-cup {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 2px dashed var(--surface-lighter);
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .water-cup.filled {
+      background: var(--accent);
+      border: none;
+    }
+
+    .water-cup.filled svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    /* Quick Stats */
+    .quick-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--surface-light);
+    }
+
+    .quick-stat {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      background: var(--surface-light);
+      border-radius: 10px;
+    }
+
+    .quick-stat .value {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .quick-stat .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* Upload Area */
+    .upload-area {
+      border: 2px dashed var(--surface-lighter);
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: rgba(0, 210, 106, 0.05);
+    }
+
+    .upload-area.dragover {
+      border-color: var(--primary);
+      background: rgba(0, 210, 106, 0.1);
+    }
+
+    /* Training Plan Styles */
+    .plan-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+
+    .plan-card:hover {
+      background: var(--surface-light);
+    }
+
+    .plan-card.today {
+      border-color: var(--primary);
+      background: rgba(0, 210, 106, 0.05);
+    }
+
+    .plan-card.completed {
+      opacity: 0.7;
+    }
+
+    .plan-card.skipped {
+      opacity: 0.5;
+    }
+
+    .plan-day {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--surface-light);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .plan-day .day-name {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .plan-day .day-num {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .plan-day.today {
+      background: var(--primary);
+    }
+
+    .plan-day.today .day-name,
+    .plan-day.today .day-num {
+      color: white;
+    }
+
+    .plan-day.past {
+      opacity: 0.5;
+    }
+
+    .plan-content {
+      flex: 1;
+    }
+
+    .plan-type {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .plan-details {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .plan-status {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .plan-status.pending {
+      background: var(--surface-light);
+    }
+
+    .plan-status.completed {
+      background: rgba(0, 210, 106, 0.2);
+    }
+
+    .plan-status.completed svg {
+      fill: var(--primary);
+    }
+
+    .plan-status.skipped {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    .plan-status.skipped svg {
+      fill: var(--danger);
+    }
+
+    .plan-status svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Import Options */
+    .import-options {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .import-option {
+      background: var(--surface-light);
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+      text-align: center;
+    }
+
+    .import-option:hover {
+      border-color: var(--surface-lighter);
+    }
+
+    .import-option.selected {
+      border-color: var(--primary);
+      background: rgba(0, 210, 106, 0.1);
+    }
+
+    .import-option .icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .import-option .title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .import-option .desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .plan-template-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .plan-template-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: var(--surface-light);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 2px solid transparent;
+    }
+
+    .plan-template-item:hover {
+      background: var(--surface-lighter);
+    }
+
+    .plan-template-item.selected {
+      border-color: var(--primary);
+    }
+
+    .plan-template-item .name {
+      font-weight: 500;
+    }
+
+    .plan-template-item .meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .plan-summary {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--surface-light);
+      border-radius: 10px;
+    }
+
+    .plan-summary-item {
+      flex: 1;
+      text-align: center;
+    }
+
+    .plan-summary-item .value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .plan-summary-item .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Responsive */
+    @media (max-width: 380px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .weekly-summary {
+        grid-template-columns: 1fr;
+      }
+    }
+    /* ===== 三本账 · 教练强化系统 ===== */
+    .coach-banner {
+      display: flex; align-items: center; gap: 14px;
+      background: linear-gradient(135deg, rgba(0,210,106,.10), rgba(59,130,246,.05));
+      border: 1px solid rgba(0,210,106,.35);
+      border-radius: 16px; padding: 14px 18px; margin-bottom: 16px;
+    }
+    .cb-tag {
+      background: var(--primary); color: #0F172A; font-weight: 700;
+      border-radius: 999px; padding: 4px 12px; font-size: 12px; white-space: nowrap;
+    }
+    .cb-line { font-weight: 700; font-size: 15px; line-height: 1.5; }
+    .cb-sub { color: var(--text-secondary); font-size: 12.5px; margin-top: 3px; line-height: 1.6; }
+    .cb-formula { margin-left: auto; color: var(--text-secondary); font-size: 12px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; }
+    .type-tip {
+      margin: -6px 0 14px; padding: 10px 14px; border-radius: 10px;
+      background: rgba(0,210,106,.08); border: 1px solid rgba(0,210,106,.3);
+      color: var(--text); font-size: 13px; line-height: 1.65;
+    }
+    .decoupling-card {
+      background: var(--surface); border: 1px solid rgba(255,107,53,.5);
+      border-radius: 16px; padding: 16px 18px; margin-bottom: 16px;
+    }
+    .dc-head { display: flex; justify-content: space-between; align-items: center; font-size: 14.5px; }
+    .dc-close { background: none; border: none; color: var(--text-secondary); font-size: 22px; cursor: pointer; line-height: 1; }
+    .dc-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; align-items: end; }
+    .dc-field label { font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+    .dc-field input {
+      width: 100%; background: var(--surface-light); border: 1px solid var(--surface-lighter);
+      border-radius: 8px; padding: 8px 10px; color: var(--text); font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dc-btn {
+      background: var(--primary); color: #0F172A; font-weight: 700; border: none;
+      border-radius: 8px; padding: 9px 14px; cursor: pointer; font-size: 13.5px; white-space: nowrap;
+    }
+    .dc-result { margin-top: 10px; font-size: 14px; line-height: 1.6; }
+    .dc-good { color: var(--primary); font-weight: 700; }
+    .dc-warn { color: var(--warning); font-weight: 700; }
+    .dc-bad { color: var(--danger); font-weight: 700; }
+    @media (max-width: 640px) {
+      .dc-grid { grid-template-columns: repeat(2, 1fr); }
+      .cb-formula { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 5.28c-1.23-.37-2.22-1.17-2.8-2.18l-1-1.6c-.41-.65-1.11-1-1.84-1-.78 0-1.59.5-1.78 1.44S7 23 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3c1 1.15 2.41 2.01 4 2.34V23H19V9.28c-.64.61-1.39 1.04-1.5 1.5z"/></svg>
+        </div>
+        <span class="logo-text">马拉松训练</span>
+      </div>
+      <span class="header-date" id="currentDate"></span>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="today">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+        今日
+      </button>
+      <button class="nav-tab" data-tab="records">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+        数据
+      </button>
+      <button class="nav-tab" data-tab="analysis">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        分析
+      </button>
+      <button class="nav-tab" data-tab="goals">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        目标
+      </button>
+      <button class="nav-tab" data-tab="plan">
+        <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+        计划
+      </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Today Tab -->
+      <div class="tab-content active" id="tab-today">
+        <!-- 三本账 · 每日教练横幅 -->
+        <div class="coach-banner" id="coachBanner">
+          <span class="cb-tag" id="cbTag">能量账</span>
+          <div>
+            <div class="cb-line" id="cbLine"></div>
+            <div class="cb-sub" id="cbSub"></div>
+          </div>
+          <span class="cb-formula">min(⚡ 🌡️ 🦵)</span>
+        </div>
+
+        <!-- 长跑后 · 解耦检查 -->
+        <div class="decoupling-card" id="decouplingCard" style="display:none">
+          <div class="dc-head">
+            <span>🏁 长跑完成 · 顺手做<b>解耦检查</b>（前后半程「速度÷心率」漂移）</span>
+            <button class="dc-close" onclick="dismissDecoupling()">×</button>
+          </div>
+          <div class="dc-grid">
+            <div class="dc-field"><label>前半均配 (/km)</label><input id="dcPace1" placeholder="5:10"></div>
+            <div class="dc-field"><label>前半心率</label><input id="dcHr1" placeholder="148" type="number"></div>
+            <div class="dc-field"><label>后半均配 (/km)</label><input id="dcPace2" placeholder="5:25"></div>
+            <div class="dc-field"><label>后半心率</label><input id="dcHr2" placeholder="153" type="number"></div>
+            <button class="dc-btn" onclick="calcDecoupling()">计算漂移</button>
+          </div>
+          <div class="dc-result" id="dcResult"></div>
+        </div>
+
+        <!-- Training Summary -->
+        <div class="card training-summary" id="todaySummary">
+          <div class="card-header">
+            <span class="card-title">
+              <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 5.28c-1.23-.37-2.22-1.17-2.8-2.18l-1-1.6c-.41-.65-1.11-1-1.84-1-.78 0-1.59.5-1.78 1.44S7 23 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3c1 1.15 2.41 2.01 4 2.34V23H19V9.28c-.64.61-1.39 1.04-1.5 1.5z"/></svg>
+              今日训练
+            </span>
+            <span class="training-type-badge" id="todayType">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
+              未记录
+            </span>
+          </div>
+          <div class="training-main">
+            <div class="training-stat">
+              <div class="value" id="todayDistance">0</div>
+              <div class="label">公里</div>
+            </div>
+            <div class="training-stat">
+              <div class="value" id="todayPace">--</div>
+              <div class="label">配速 /km</div>
+            </div>
+            <div class="training-stat">
+              <div class="value" id="todayDuration">0</div>
+              <div class="label">分钟</div>
+            </div>
+          </div>
+          <div class="quick-stats">
+            <div class="quick-stat">
+              <div class="value" id="todayFatigue">-</div>
+              <div class="label">疲劳指数</div>
+            </div>
+            <div class="quick-stat">
+              <div class="value" id="todaySleep">-</div>
+              <div class="label">睡眠(小时)</div>
+            </div>
+            <div class="quick-stat">
+              <div class="value" id="todayWeight">-</div>
+              <div class="label">体重(kg)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daily Analysis -->
+        <h3 class="section-title">每日分析</h3>
+        <div class="card analysis-summary" id="dailyAnalysis">
+          <div class="analysis-item">
+            <div class="analysis-icon good">
+              <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </div>
+            <div class="analysis-content">
+              <h4>训练状态良好</h4>
+              <p>今日已完成训练，继续保持！</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Sections -->
+        <div class="form-section expanded" id="section-training">
+          <div class="form-section-header" onclick="toggleSection('training')">
+            <span class="title">
+              <span class="icon green">
+                <svg viewBox="0 0 24 24" fill="#00D26A"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+              </span>
+              训练记录
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">训练类型</label>
+                <select class="form-input" id="trainingType">
+                  <option value="">选择类型</option>
+                  <option value="长跑">长跑</option>
+                  <option value="间歇跑">间歇跑</option>
+                  <option value="节奏跑">节奏跑</option>
+                  <option value="E跑">E跑(轻松跑)</option>
+                  <option value="力量训练">力量训练</option>
+                  <option value="交叉训练">交叉训练</option>
+                  <option value="休息日">休息日</option>
+                </select>
+              </div>
+              <div class="type-tip" id="typeTip" style="display:none"></div>
+              <div class="form-group">
+                <label class="form-label">天气</label>
+                <select class="form-input" id="trainingWeather">
+                  <option value="">选择天气</option>
+                  <option value="晴">晴</option>
+                  <option value="阴">阴</option>
+                  <option value="小雨">小雨</option>
+                  <option value="大雨">大雨</option>
+                  <option value="雪">雪</option>
+                  <option value="高温">高温</option>
+                  <option value="低温">低温</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">距离 (km)</label>
+                <input type="number" class="form-input" id="trainingDistance" placeholder="0" step="0.01" min="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">时长 (分钟)</label>
+                <input type="number" class="form-input" id="trainingDuration" placeholder="0" min="0">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">主观感受 (RPE 1-10)</label>
+              <div class="range-container">
+                <div class="range-labels">
+                  <span>轻松</span>
+                  <span>困难</span>
+                </div>
+                <input type="range" class="range-slider" id="trainingRpe" min="1" max="10" value="5">
+                <div class="range-value" id="rpeValue">5</div>
+              </div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">备注</label>
+              <textarea class="form-input" id="trainingNotes" placeholder="训练感受、特殊情况..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="section-injury">
+          <div class="form-section-header" onclick="toggleSection('injury')">
+            <span class="title">
+              <span class="icon orange">
+                <svg viewBox="0 0 24 24" fill="#FF6B35"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+              </span>
+              伤病记录
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">伤病部位</label>
+                <select class="form-input" id="injuryPart">
+                  <option value="">选择部位</option>
+                  <option value="膝盖">膝盖</option>
+                  <option value="小腿">小腿</option>
+                  <option value="大腿">大腿</option>
+                  <option value="脚踝">脚踝</option>
+                  <option value="足底">足底</option>
+                  <option value="跟腱">跟腱</option>
+                  <option value="髋关节">髋关节</option>
+                  <option value="背部">背部</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">严重程度</label>
+                <div class="range-container">
+                  <input type="range" class="range-slider" id="injurySeverity" min="1" max="10" value="3">
+                  <div class="range-value" id="severityValue">3</div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">症状</label>
+              <select class="form-input" id="injurySymptom">
+                <option value="">选择症状</option>
+                <option value="疼痛">疼痛</option>
+                <option value="酸痛">酸痛</option>
+                <option value="刺痛">刺痛</option>
+                <option value="麻木">麻木</option>
+                <option value="肿胀">肿胀</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">处理措施</label>
+              <textarea class="form-input" id="injuryTreatment" placeholder="已采取的处理措施..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="section-recovery">
+          <div class="form-section-header" onclick="toggleSection('recovery')">
+            <span class="title">
+              <span class="icon blue">
+                <svg viewBox="0 0 24 24" fill="#3B82F6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              </span>
+              恢复追踪
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-group">
+              <label class="form-label">疲劳指数 (1-10)</label>
+              <div class="range-container">
+                <div class="range-labels"><span>精神饱满</span><span>极度疲劳</span></div>
+                <input type="range" class="range-slider" id="fatigueLevel" min="1" max="10" value="5">
+                <div class="range-value" id="fatigueValue">5</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">睡眠质量</label>
+              <div class="range-container">
+                <div class="range-labels"><span>很差</span><span>很好</span></div>
+                <input type="range" class="range-slider" id="sleepQuality" min="1" max="5" value="3">
+                <div class="range-value" id="sleepValue">3</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">睡眠时长 (小时)</label>
+                <input type="number" class="form-input" id="sleepHours" placeholder="7.5" step="0.5" min="0" max="24">
+              </div>
+              <div class="form-group">
+                <label class="form-label">静息心率 (BPM)</label>
+                <input type="number" class="form-input" id="restingHR" placeholder="60" min="30" max="200">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="section-mental">
+          <div class="form-section-header" onclick="toggleSection('mental')">
+            <span class="title">
+              <span class="icon purple">
+                <svg viewBox="0 0 24 24" fill="#A855F7"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>
+              </span>
+              心理状况
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-group">
+              <label class="form-label">今日心情</label>
+              <div class="mood-selector">
+                <button class="mood-btn" data-mood="开心" onclick="selectMood(this)">
+                  <div class="emoji">&#128513;</div>
+                  <div class="label">开心</div>
+                </button>
+                <button class="mood-btn" data-mood="平静" onclick="selectMood(this)">
+                  <div class="emoji">&#128528;</div>
+                  <div class="label">平静</div>
+                </button>
+                <button class="mood-btn" data-mood="一般" onclick="selectMood(this)">
+                  <div class="emoji">&#128530;</div>
+                  <div class="label">一般</div>
+                </button>
+                <button class="mood-btn" data-mood="焦虑" onclick="selectMood(this)">
+                  <div class="emoji">&#128543;</div>
+                  <div class="label">焦虑</div>
+                </button>
+                <button class="mood-btn" data-mood="疲惫" onclick="selectMood(this)">
+                  <div class="emoji">&#128555;</div>
+                  <div class="label">疲惫</div>
+                </button>
+              </div>
+              <input type="hidden" id="selectedMood" value="">
+            </div>
+            <div class="form-group">
+              <label class="form-label">训练动力 (1-10)</label>
+              <div class="range-container">
+                <div class="range-labels"><span>没动力</span><span>充满动力</span></div>
+                <input type="range" class="range-slider" id="motivation" min="1" max="10" value="7">
+                <div class="range-value" id="motivationValue">7</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">压力水平</label>
+              <select class="form-input" id="stressLevel">
+                <option value="">选择压力水平</option>
+                <option value="低">低</option>
+                <option value="中">中</option>
+                <option value="高">高</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">心理笔记</label>
+              <textarea class="form-input" id="mentalNotes" placeholder="记录你的想法..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="section-diet">
+          <div class="form-section-header" onclick="toggleSection('diet')">
+            <span class="title">
+              <span class="icon green">
+                <svg viewBox="0 0 24 24" fill="#00D26A"><path d="M18.06 22.99h1.66c.84 0 1.53-.64 1.63-1.46L23 5.05l-5 2v5.12c0 .6-.4 1.13-.98 1.34l-4.52 1.63V22.2c0 .6-.4 1.13-.98 1.34l-3.52 1.27V22.2c0 .6-.4 1.13-.98 1.34l-3.52 1.27V22.2c0 .6-.4 1.13-.98 1.34l-3.52 1.27V22.2c0 .6-.4 1.13-.98 1.34l-3.52 1.27v-4.63l-5-2 1.66 14.48c.1.82.79 1.46 1.63 1.46h1.66l.93-7.99 2.5 2.5 2.5-2.5.93 7.99zM5 11l.49-4.22 2.46.98-.45 3.88-2.5-.64zm14 .06l-2.5.64-.45-3.88 2.46-.98.49 4.22z"/></svg>
+              </span>
+              饮食记录
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-group">
+              <label class="form-label">饮食质量 (1-5)</label>
+              <div class="range-container">
+                <input type="range" class="range-slider" id="dietQuality" min="1" max="5" value="3">
+                <div class="range-value" id="dietValue">3</div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">水分摄入 (杯数)</label>
+              <div class="water-tracker" id="waterTracker">
+                <button class="water-cup" data-cup="1" onclick="toggleWater(1)"></button>
+                <button class="water-cup" data-cup="2" onclick="toggleWater(2)"></button>
+                <button class="water-cup" data-cup="3" onclick="toggleWater(3)"></button>
+                <button class="water-cup" data-cup="4" onclick="toggleWater(4)"></button>
+                <button class="water-cup" data-cup="5" onclick="toggleWater(5)"></button>
+                <button class="water-cup" data-cup="6" onclick="toggleWater(6)"></button>
+                <button class="water-cup" data-cup="7" onclick="toggleWater(7)"></button>
+                <button class="water-cup" data-cup="8" onclick="toggleWater(8)"></button>
+              </div>
+              <input type="hidden" id="waterIntake" value="0">
+            </div>
+            <div class="form-group full">
+              <label class="form-label">特殊饮食</label>
+              <textarea class="form-input" id="dietNotes" placeholder="高碳水、低脂、营养品补充等..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="section-body">
+          <div class="form-section-header" onclick="toggleSection('body')">
+            <span class="title">
+              <span class="icon blue">
+                <svg viewBox="0 0 24 24" fill="#3B82F6"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+              </span>
+              体重记录
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+          </div>
+          <div class="form-section-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">晨起体重 (kg)</label>
+                <input type="number" class="form-input" id="morningWeight" placeholder="65.0" step="0.1" min="20" max="200">
+              </div>
+              <div class="form-group">
+                <label class="form-label">睡前体重 (kg)</label>
+                <input type="number" class="form-input" id="eveningWeight" placeholder="65.5" step="0.1" min="20" max="200">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveAllRecords()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          保存今日记录
+        </button>
+      </div>
+
+      <!-- Records Tab -->
+      <div class="tab-content" id="tab-records">
+        <div class="filter-bar">
+          <button class="filter-btn active" data-filter="all" onclick="filterRecords('all')">全部</button>
+          <button class="filter-btn" data-filter="training" onclick="filterRecords('training')">训练</button>
+          <button class="filter-btn" data-filter="injury" onclick="filterRecords('injury')">伤病</button>
+          <button class="filter-btn" data-filter="recovery" onclick="filterRecords('recovery')">恢复</button>
+          <button class="filter-btn" data-filter="body" onclick="filterRecords('body')">体重</button>
+        </div>
+        <div id="recordsList"></div>
+      </div>
+
+      <!-- Analysis Tab -->
+      <div class="tab-content" id="tab-analysis">
+        <div class="date-nav">
+          <button class="date-nav-btn" onclick="changeAnalysisWeek(-1)">
+            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+          </button>
+          <span class="current-date" id="analysisWeekLabel">本周</span>
+          <button class="date-nav-btn" onclick="changeAnalysisWeek(1)">
+            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </button>
+        </div>
+
+        <h3 class="section-title">本周统计</h3>
+        <div class="weekly-summary">
+          <div class="weekly-stat">
+            <div class="value" id="weekDistance">0</div>
+            <div class="label">总跑量(km)</div>
+          </div>
+          <div class="weekly-stat">
+            <div class="value" id="weekTime">0</div>
+            <div class="label">训练时长(分)</div>
+          </div>
+          <div class="weekly-stat">
+            <div class="value" id="weekCount">0</div>
+            <div class="label">训练天数</div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-header">
+            <span class="chart-title">每日跑量</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="distanceChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-header">
+            <span class="chart-title">训练类型分布</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="typeChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div class="chart-header">
+            <span class="chart-title">疲劳趋势</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="fatigueChart"></canvas>
+          </div>
+        </div>
+
+        <h3 class="section-title">周分析报告</h3>
+        <div class="card" id="weeklyReport"></div>
+      </div>
+
+      <!-- Goals Tab -->
+      <div class="tab-content" id="tab-goals">
+        <div id="goalsList"></div>
+        <button class="btn btn-secondary" onclick="openGoalModal()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          添加新目标
+        </button>
+      </div>
+
+      <!-- Plan Tab -->
+      <div class="tab-content" id="tab-plan">
+        <h3 class="section-title">本周训练计划</h3>
+        <div id="weekPlanList"></div>
+        <div class="plan-summary" id="planSummary" style="display: none;">
+          <div class="plan-summary-item">
+            <div class="value" id="planTotalDistance">0</div>
+            <div class="label">计划跑量(km)</div>
+          </div>
+          <div class="plan-summary-item">
+            <div class="value" id="planCompleted">0</div>
+            <div class="label">已完成</div>
+          </div>
+          <div class="plan-summary-item">
+            <div class="value" id="planRemaining">0</div>
+            <div class="label">剩余</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="openPlanModal()" style="margin-top: 16px;">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          导入训练计划
+        </button>
+      </div>
+    </main>
+
+    <!-- Toast -->
+    <div class="toast" id="toast">
+      <svg class="toast-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      <span id="toastMessage">保存成功</span>
+    </div>
+
+    <!-- Goal Modal -->
+    <div class="modal-overlay" id="goalModal">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">添加新目标</span>
+          <button class="modal-close" onclick="closeGoalModal()">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">目标类型</label>
+            <select class="form-input" id="goalType">
+              <option value="月跑量">月跑量 (km)</option>
+              <option value="体重">体重目标 (kg)</option>
+              <option value="比赛配速">比赛配速 (min/km)</option>
+              <option value="连续训练">连续训练天数</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">目标值</label>
+            <input type="number" class="form-input" id="goalTarget" placeholder="200" step="0.1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">当前值</label>
+            <input type="number" class="form-input" id="goalCurrent" placeholder="0" step="0.1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">截止日期</label>
+            <input type="date" class="form-input" id="goalDeadline">
+          </div>
+          <button class="btn btn-primary" onclick="saveGoal()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            创建目标
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Import Modal -->
+    <div class="modal-overlay" id="planModal">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">导入训练计划</span>
+          <button class="modal-close" onclick="closePlanModal()">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- PDF Upload Section -->
+          <div class="section-title" style="margin-bottom: 12px;">上传训练计划PDF</div>
+          <div class="upload-area" id="uploadArea" onclick="document.getElementById('pdfInput').click()">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="var(--text-secondary)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+            <p style="color: var(--text-secondary); margin-top: 12px;">点击上传PDF文件</p>
+            <p style="color: var(--text-secondary); font-size: 12px;">支持 DARKHORSE 等训练计划PDF</p>
+          </div>
+          <input type="file" id="pdfInput" accept=".pdf" style="display: none;" onchange="handlePdfUpload(event)">
+          
+          <div id="pdfPreview" style="display: none; margin-top: 16px;">
+            <div class="card" style="padding: 16px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-weight: 600;" id="pdfFileName">训练计划.pdf</span>
+                <button onclick="clearPdfUpload()" style="background: none; border: none; color: var(--danger); cursor: pointer;">删除</button>
+              </div>
+              <div id="parsedPlanPreview" style="font-size: 13px; color: var(--text-secondary);"></div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin: 20px 0; color: var(--text-secondary);">— 或选择预设模板 —</div>
+
+          <div class="plan-template-list">
+            <div class="plan-template-item" onclick="selectTemplate('beginner')" id="tpl-beginner">
+              <div>
+                <div class="name">初学者计划</div>
+                <div class="meta">每周4天 · E跑+间歇+长跑</div>
+              </div>
+            </div>
+            <div class="plan-template-item" onclick="selectTemplate('intermediate')" id="tpl-intermediate">
+              <div>
+                <div class="name">进阶计划</div>
+                <div class="meta">每周5天 · 提升配速</div>
+              </div>
+            </div>
+            <div class="plan-template-item" onclick="selectTemplate('advanced')" id="tpl-advanced">
+              <div>
+                <div class="name">高级计划</div>
+                <div class="meta">每周6天 · 冲击PB</div>
+              </div>
+            </div>
+            <div class="plan-template-item" onclick="selectTemplate('maintenance')" id="tpl-maintenance">
+              <div>
+                <div class="name">保持计划</div>
+                <div class="meta">每周4天 · 维持状态</div>
+              </div>
+            </div>
+          </div>
+          
+          <div id="customPlanSection" style="display: none; margin-top: 16px;">
+            <div class="section-title" style="margin-bottom: 12px;">自定义本周计划</div>
+            <div class="form-group">
+              <label class="form-label">周一</label>
+              <select class="form-input" id="customMon">
+                <option value="">休息日</option>
+                <option value="E跑-5-30">E跑 5km</option>
+                <option value="E跑-8-50">E跑 8km</option>
+                <option value="间歇跑-6-40">间歇跑 6km</option>
+                <option value="力量训练">力量训练</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周二</label>
+              <select class="form-input" id="customTue">
+                <option value="">休息日</option>
+                <option value="E跑-5-30">E跑 5km</option>
+                <option value="间歇跑-6-40">间歇跑 6km</option>
+                <option value="节奏跑-10-50">节奏跑 10km</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周三</label>
+              <select class="form-input" id="customWed">
+                <option value="">休息日</option>
+<option value="E跑-6-40">E跑 6km</option>
+                <option value="间歇跑-8-45">间歇跑 8km</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周四</label>
+              <select class="form-input" id="customThu">
+                <option value="">休息日</option>
+                <option value="E跑-5-30">E跑 5km</option>
+                <option value="力量训练">力量训练</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周五</label>
+              <select class="form-input" id="customFri">
+                <option value="">休息日</option>
+                <option value="E跑-6-40">E跑 6km</option>
+                <option value="力量训练">力量训练</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周六</label>
+              <select class="form-input" id="customSat">
+                <option value="">休息日</option>
+                <option value="长跑-15-90">长跑 15km</option>
+                <option value="长跑-20-120">长跑 20km</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">周日</label>
+              <select class="form-input" id="customSun">
+                <option value="">休息日</option>
+                <option value="E跑-5-30">E跑 5km</option>
+                <option value="交叉训练">交叉训练</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="importPlan()" style="margin-top: 16px;">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            导入到本周
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <script>
+    // Training Plan Templates
+    const PLAN_TEMPLATES = {
+      beginner: {
+        name: '初学者计划',
+        days: ['E跑-5-30', '休息', 'E跑-6-40', '休息', '力量训练', '长跑-10-60', '休息']
+      },
+      intermediate: {
+        name: '进阶计划',
+        days: ['E跑-8-50', '间歇跑-8-45', 'E跑-6-40', '力量训练', '节奏跑-12-60', '长跑-18-110', 'E跑-5-30']
+      },
+      advanced: {
+        name: '高级计划',
+        days: ['E跑-10-60', '间歇跑-10-50', 'E跑-8-50', '力量训练', '节奏跑-15-75', '长跑-25-150', '休息']
+      },
+      maintenance: {
+        name: '保持计划',
+        days: ['E跑-6-40', '休息', 'E跑-8-50', '力量训练', '休息', '长跑-12-75', 'E跑-5-30']
+      }
+    };
+
+    // Data Storage Keys
+    const STORAGE_KEYS = {
+      training: 'marathon_training_records',
+      injury: 'marathon_injury_records',
+      recovery: 'marathon_recovery_records',
+      mental: 'marathon_mental_records',
+      diet: 'marathon_diet_records',
+      body: 'marathon_body_records',
+      goals: 'marathon_goals',
+      plan: 'marathon_week_plan'
+    };
+
+    // State
+    let currentWeekOffset = 0;
+    let currentFilter = 'all';
+    let selectedWater = 0;
+    let charts = {};
+    let selectedTemplate = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      initDate();
+      initTabs();
+      initRangeSliders();
+      loadTodayData();
+      loadGoals();
+      loadRecords();
+      renderAnalysis();
+      loadWeekPlan();
+      initCoach();
+    });
+
+    // Date Functions
+    function initDate() {
+      const today =new Date();
+      const options = { month: 'long', day: 'numeric', weekday: 'long' };
+      document.getElementById('currentDate').textContent = today.toLocaleDateString('zh-CN', options);
+    }
+
+    function getDateStr(date = new Date()) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', weekday: 'short' });
+    }
+
+    function getWeekDates(offset = 0) {
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1) + offset * 7);
+
+      const dates = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        dates.push(getDateStr(date));
+      }
+      return dates;
+    }
+
+    function getDayName(index) {
+      return ['一', '二', '三', '四', '五', '六', '日'][index];
+    }
+
+    // Tab Navigation
+    function initTabs() {
+      document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+          if (tab.dataset.tab === 'records') loadRecords();
+          if (tab.dataset.tab === 'analysis') renderAnalysis();
+          if (tab.dataset.tab === 'goals') loadGoals();
+          if (tab.dataset.tab === 'plan') loadWeekPlan();
+        });
+      });
+    }
+
+    // Section Toggle
+    function toggleSection(section) {
+      const el = document.getElementById('section-' + section);
+      el.classList.toggle('expanded');
+    }
+
+    //Range Sliders
+    function initRangeSliders() {
+      const sliders = [
+        { id: 'trainingRpe', display: 'rpeValue' },
+        { id: 'injurySeverity', display: 'severityValue' },
+        { id: 'fatigueLevel', display: 'fatigueValue' },
+        { id: 'sleepQuality', display: 'sleepValue' },
+        { id: 'motivation', display: 'motivationValue' },
+        { id: 'dietQuality', display: 'dietValue' }
+      ];
+
+      sliders.forEach(({ id, display }) => {
+        const slider = document.getElementById(id);
+        const valueDisplay = document.getElementById(display);
+        if (slider && valueDisplay) {
+          slider.addEventListener('input', () => {
+            valueDisplay.textContent = slider.value;
+          });
+        }
+      });
+    }
+
+    // Mood Selection
+    function selectMood(btn) {
+      document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      document.getElementById('selectedMood').value = btn.dataset.mood;
+    }
+
+    // Water Tracking
+    function toggleWater(cup) {
+      const cups = document.querySelectorAll('.water-cup');
+      if (cup <= selectedWater) {
+        selectedWater = cup - 1;
+      } else {
+        selectedWater = cup;
+      }
+      updateWaterDisplay();
+    }
+
+    function updateWaterDisplay() {
+      document.querySelectorAll('.water-cup').forEach((cup, i) => {
+        if (i < selectedWater) {
+          cup.classList.add('filled');
+          cup.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z"/></svg>';
+        } else {
+          cup.classList.remove('filled');
+          cup.innerHTML = '';
+        }
+      });
+      document.getElementById('waterIntake').value = selectedWater;
+    }
+
+    // Storage Functions
+    function saveToStorage(key, data) {
+      localStorage.setItem(STORAGE_KEYS[key], JSON.stringify(data));
+    }
+
+    function loadFromStorage(key) {
+      const data = localStorage.getItem(STORAGE_KEYS[key]);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
+    // Save All Records
+    function saveAllRecords() {
+      const today = getDateStr();
+
+      // Training
+      const trainingType = document.getElementById('trainingType').value;
+      let savedDistance = 0, savedDuration = 0;
+      if (trainingType) {
+        const distance = parseFloat(document.getElementById('trainingDistance').value) || 0;
+        const duration = parseFloat(document.getElementById('trainingDuration').value) || 0;
+        const pace = duration && distance ? (duration / distance).toFixed(2) : 0;
+
+        const training = {
+          id: generateId(),
+          date: today,
+          type: trainingType,
+          distance: distance,
+          duration: duration,
+          pace: pace,
+          rpe: parseInt(document.getElementById('trainingRpe').value),
+          weather: document.getElementById('trainingWeather').value,
+          notes: document.getElementById('trainingNotes').value
+        };
+
+        let trainings = loadFromStorage('training');
+        const existingIndex = trainings.findIndex(t => t.date === today);
+        if (existingIndex >= 0) {
+          trainings[existingIndex] = training;
+        } else {
+          trainings.push(training);
+        }
+        saveToStorage('training', trainings);
+        savedDistance = distance; savedDuration = duration;
+      }
+
+      // Injury
+      const injuryPart = document.getElementById('injuryPart').value;
+      if (injuryPart) {
+        const injury = {
+          id: generateId(),
+          date: today,
+          bodyPart: injuryPart,
+          severity: parseInt(document.getElementById('injurySeverity').value),
+          symptom: document.getElementById('injurySymptom').value,
+          treatment: document.getElementById('injuryTreatment').value
+        };
+
+        let injuries = loadFromStorage('injury');
+        injuries.push(injury);
+        saveToStorage('injury', injuries);
+      }
+
+      // Recovery
+      const fatigue = parseInt(document.getElementById('fatigueLevel').value);
+      const sleepQuality = parseInt(document.getElementById('sleepQuality').value);
+      const sleepHours = parseFloat(document.getElementById('sleepHours').value) || 0;
+      const restingHR = parseInt(document.getElementById('restingHR').value) || 0;
+
+      if (fatigue || sleepQuality || sleepHours) {
+        const recovery = {
+          id: generateId(),
+          date: today,
+          fatigue: fatigue,
+          sleepQuality: sleepQuality,
+          sleepHours: sleepHours,
+          restingHR: restingHR
+        };
+
+        let recoveries = loadFromStorage('recovery');
+        const existingIndex = recoveries.findIndex(r => r.date === today);
+        if (existingIndex >= 0) {
+          recoveries[existingIndex] = recovery;
+        } else {
+          recoveries.push(recovery);
+        }
+        saveToStorage('recovery', recoveries);
+      }
+
+      // Mental
+      const mood = document.getElementById('selectedMood').value;
+      const motivation = parseInt(document.getElementById('motivation').value);
+      const stressLevel = document.getElementById('stressLevel').value;
+      const mentalNotes = document.getElementById('mentalNotes').value;
+
+      if (mood || motivation) {
+        const mental = {
+          id: generateId(),
+          date: today,
+          mood: mood,
+          motivation: motivation,
+          stress: stressLevel,
+          notes: mentalNotes
+        };
+
+        let mentals = loadFromStorage('mental');
+        const existingIndex = mentals.findIndex(m => m.date === today);
+        if (existingIndex >= 0) {
+          mentals[existingIndex] = mental;
+        } else {
+          mentals.push(mental);
+        }
+        saveToStorage('mental', mentals);
+      }
+
+      // Diet
+      const dietQuality = parseInt(document.getElementById('dietQuality').value);
+      const waterIntake = parseInt(document.getElementById('waterIntake').value) || 0;
+      const dietNotes = document.getElementById('dietNotes').value;
+
+      if (dietQuality || waterIntake) {
+        const diet = {
+          id: generateId(),
+          date: today,
+          quality: dietQuality,
+          water: waterIntake,
+          notes: dietNotes
+        };
+
+        let diets = loadFromStorage('diet');
+        const existingIndex = diets.findIndex(d => d.date === today);
+        if (existingIndex >= 0) {
+          diets[existingIndex] = diet;
+        } else {
+          diets.push(diet);
+        }
+        saveToStorage('diet', diets);
+      }
+
+      // Body
+      const morningWeight = parseFloat(document.getElementById('morningWeight').value);
+      const eveningWeight = parseFloat(document.getElementById('eveningWeight').value);
+
+      if (morningWeight || eveningWeight) {
+        const body = {
+          id: generateId(),
+          date: today,
+          morningWeight: morningWeight || null,
+          eveningWeight: eveningWeight || null,
+          weight: morningWeight || eveningWeight
+        };
+
+        let bodies = loadFromStorage('body');
+        const existingIndex = bodies.findIndex(b => b.date === today);
+        if (existingIndex >= 0) {
+          bodies[existingIndex] = body;
+        } else {
+          bodies.push(body);
+        }
+        saveToStorage('body', bodies);
+      }
+
+      showToast('保存成功', 'success');
+      loadTodayData();
+      loadWeekPlan();
+      coachAfterSave(trainingType, savedDistance, savedDuration);
+      clearForms();
+    }
+
+    function clearForms() {
+      document.getElementById('trainingType').value = '';
+      document.getElementById('trainingDistance').value = '';
+      document.getElementById('trainingDuration').value = '';
+      document.getElementById('trainingRpe').value = '5';
+      document.getElementById('rpeValue').textContent = '5';
+      document.getElementById('trainingWeather').value = '';
+      document.getElementById('trainingNotes').value = '';
+      document.getElementById('injuryPart').value = '';
+      document.getElementById('injurySeverity').value = '3';
+      document.getElementById('severityValue').textContent = '3';
+      document.getElementById('injurySymptom').value = '';
+      document.getElementById('injuryTreatment').value = '';
+      document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+      document.getElementById('selectedMood').value = '';
+      document.getElementById('mentalNotes').value = '';
+      selectedWater = 0;
+      updateWaterDisplay();
+      document.getElementById('dietNotes').value = '';
+      document.getElementById('morningWeight').value = '';
+      document.getElementById('eveningWeight').value = '';
+    }
+
+    // Load Today Data
+    function loadTodayData() {
+      const today = getDateStr();
+      const trainings = loadFromStorage('training');
+      const todayTraining = trainings.find(t => t.date === today);
+
+      if (todayTraining) {
+        document.getElementById('todayDistance').textContent = todayTraining.distance;
+        document.getElementById('todayPace').textContent = todayTraining.pace || '--';
+        document.getElementById('todayDuration').textContent = todayTraining.duration;
+        document.getElementById('todayType').innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
+          ${todayTraining.type}
+        `;
+      } else {
+        document.getElementById('todayDistance').textContent = '0';
+        document.getElementById('todayPace').textContent = '--';
+        document.getElementById('todayDuration').textContent = '0';
+        document.getElementById('todayType').innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
+          未记录
+        `;
+      }
+
+      const recoveries = loadFromStorage('recovery');
+      const todayRecovery = recoveries.find(r => r.date === today);
+      document.getElementById('todayFatigue').textContent = todayRecovery ? todayRecovery.fatigue : '-';
+      document.getElementById('todaySleep').textContent = todayRecovery ? (todayRecovery.sleepHours || '-') : '-';
+
+      const bodies = loadFromStorage('body');
+      const todayBody = bodies.find(b => b.date === today);
+      document.getElementById('todayWeight').textContent = todayBody ? (todayBody.weight || '-') : '-';
+
+      generateDailyAnalysis(todayTraining, todayRecovery, todayBody);
+    }
+
+    // Generate Daily Analysis
+    function generateDailyAnalysis(training, recovery, body) {
+      const analysis = [];
+
+      if (training) {
+        if (training.rpe <= 5) {
+          analysis.push({ type: 'good', title: '训练强度适中', desc: `RPE ${training.rpe}，感觉良好，继续保持！` });
+        } else if (training.rpe <= 7) {
+          analysis.push({ type: 'warning', title: '训练强度较高', desc: '注意休息和恢复，避免连续高强度训练。' });
+        } else {
+          analysis.push({ type: 'danger', title: '训练强度过高', desc: '建议降低强度，避免过度训练和伤病风险。' });
+        }
+
+        if (training.distance >= 20) {
+          analysis.push({ type: 'good', title: '长距离训练完成', desc: `完成${training.distance}km，为马拉松打下坚实基础。` });
+        }
+      }
+
+      if (recovery) {
+        if (recovery.fatigue >= 7) {
+          analysis.push({ type: 'warning', title: '疲劳指数偏高', desc: '建议增加休息时间，保证充足睡眠。' });
+        }
+        if (recovery.sleepHours < 7) {
+          analysis.push({ type: 'warning', title: '睡眠不足', desc: '建议保证7-8小时睡眠，促进身体恢复。' });
+        }
+      }
+
+      if (!training && !recovery) {
+        analysis.push({ type: 'good', title: '今日待记录', desc: '还没有今日的训练记录，开始记录吧！' });
+      }
+
+      renderAnalysisItems(analysis, 'dailyAnalysis');
+    }
+
+    function renderAnalysisItems(items, containerId) {
+      const container = document.getElementById(containerId);
+      const icons = {
+        good: '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
+        warning: '<svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>',
+        danger: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+      };
+
+      container.innerHTML = items.map(item => `
+        <div class="analysis-item">
+          <div class="analysis-icon ${item.type}">${icons[item.type]}</div>
+          <div class="analysis-content">
+            <h4>${item.title}</h4>
+            <p>${item.desc}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Records Tab
+    function loadRecords() {
+      const trainings = loadFromStorage('training');
+      const injuries = loadFromStorage('injury');
+      const recoveries = loadFromStorage('recovery');
+      const bodies = loadFromStorage('body');
+
+      let allRecords = [];
+      trainings.forEach(t => allRecords.push({ ...t, recordType: 'training' }));
+      injuries.forEach(i => allRecords.push({ ...i, recordType: 'injury' }));
+      recoveries.forEach(r => allRecords.push({ ...r, recordType: 'recovery' }));
+      bodies.forEach(b => allRecords.push({ ...b, recordType: 'body' }));
+
+      allRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+      renderRecords(allRecords);
+    }
+
+    function filterRecords(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === filter);
+      });
+      loadRecords();
+    }
+
+    function renderRecords(records) {
+      const container = document.getElementById('recordsList');
+      let filteredRecords = currentFilter !== 'all' ? records.filter(r => r.recordType === currentFilter) : records;
+
+      if (filteredRecords.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+            <div class="title">暂无记录</div>
+            <div class="desc">开始记录你的训练数据吧</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filteredRecords.map(record => {
+        if (record.recordType === 'training') {
+          return `
+            <div class="history-item">
+              <div class="history-date">${formatDate(record.date)}</div>
+              <div class="history-content">
+                <div>
+                  <div class="history-title">${record.type}</div>
+                  <div class="history-stats">
+                    <span class="history-stat"><span>${record.distance}</span> km</span>
+                    <span class="history-stat"><span>${record.pace || '--'}</span> /km</span>
+                    <span class="history-stat"><span>${record.duration}</span> 分钟</span>
+                  </div>
+                </div>
+                <div class="history-actions">
+                  <button class="history-action delete" onclick="deleteRecord('training', '${record.id}')">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (record.recordType === 'injury') {
+          const severityClass = record.severity <= 3 ? 'mild' : record.severity <= 6 ? 'moderate' : 'severe';
+          return `
+            <div class="history-item">
+              <div class="history-date">${formatDate(record.date)}</div>
+              <div class="history-content">
+                <div>
+                  <div class="history-title">伤病记录 - ${record.bodyPart}</div>
+                  <div class="history-stats">
+                    <span class="injury-tag ${severityClass}">严重程度: ${record.severity}/10</span>
+                    <span class="history-stat">${record.symptom || ''}</span>
+                  </div>
+                </div>
+                <div class="history-actions">
+                  <button class="history-action delete" onclick="deleteRecord('injury', '${record.id}')">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (record.recordType === 'recovery') {
+          return `
+            <div class="history-item">
+              <div class="history-date">${formatDate(record.date)}</div>
+              <div class="history-content">
+                <div>
+                  <div class="history-title">恢复追踪</div>
+                  <div class="history-stats">
+                    <span class="history-stat">疲劳 <span>${record.fatigue || '-'}</span>/10</span>
+                    <span class="history-stat">睡眠 <span>${record.sleepHours || '-'}</span>小时</span>
+                  </div>
+                </div>
+                <div class="history-actions">
+                  <button class="history-action delete" onclick="deleteRecord('recovery', '${record.id}')">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (record.recordType === 'body') {
+          return `
+            <div class="history-item">
+              <div class="history-date">${formatDate(record.date)}</div>
+              <div class="history-content">
+                <div>
+                  <div class="history-title">体重记录</div>
+                  <div class="history-stats">
+                    <span class="history-stat">晨起 <span>${record.morningWeight || '-'}</span> kg</span>
+                    <span class="history-stat">睡前 <span>${record.eveningWeight || '-'}</span> kg</span>
+                  </div>
+                </div>
+                <div class="history-actions">
+                  <button class="history-action delete" onclick="deleteRecord('body', '${record.id}')">
+                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        return '';
+      }).join('');
+    }
+
+    function deleteRecord(type, id) {
+      let records = loadFromStorage(type);
+      records = records.filter(r => r.id !== id);
+      saveToStorage(type, records);
+      showToast('删除成功', 'success');
+      loadRecords();
+      loadTodayData();
+      loadWeekPlan();
+    }
+
+    // Analysis Tab
+    function renderAnalysis() {
+      const weekDates = getWeekDates(currentWeekOffset);
+      const weekLabel = currentWeekOffset === 0 ? '本周' : currentWeekOffset === 1 ? '下周' : `${Math.abs(currentWeekOffset)}周前`;
+      document.getElementById('analysisWeekLabel').textContent = weekLabel;
+
+      const trainings = loadFromStorage('training');
+      const recoveries = loadFromStorage('recovery');
+
+      const weekTrainings = trainings.filter(t => weekDates.includes(t.date));
+      const weekRecoveries = recoveries.filter(r => weekDates.includes(r.date));
+
+      const totalDistance = weekTrainings.reduce((sum, t) => sum + (t.distance || 0), 0);
+      const totalTime = weekTrainings.reduce((sum, t) => sum + (t.duration || 0), 0);
+      const trainingDays = weekTrainings.length;
+
+      document.getElementById('weekDistance').textContent = totalDistance.toFixed(1);
+      document.getElementById('weekTime').textContent = Math.round(totalTime);
+      document.getElementById('weekCount').textContent = trainingDays;
+
+      renderDistanceChart(weekDates, weekTrainings);
+      renderTypeChart(weekTrainings);
+      renderFatigueChart(weekDates, weekRecoveries);
+      generateWeeklyReport(weekTrainings, weekRecoveries, totalDistance);
+    }
+
+    function changeAnalysisWeek(delta) {
+      currentWeekOffset += delta;
+      renderAnalysis();
+    }
+
+    function renderDistanceChart(dates, trainings) {
+      const ctx = document.getElementById('distanceChart').getContext('2d');
+      if (charts.distance) charts.distance.destroy();
+
+      const data = dates.map(date => {
+        const t = trainings.find(tr => tr.date === date);
+        return t ? t.distance : 0;
+      });
+
+      charts.distance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['一', '二', '三', '四', '五', '六', '日'],
+          datasets: [{
+            label: '跑量 (km)',
+            data: data,
+            backgroundColor: 'rgba(0, 210, 106, 0.6)',
+            borderColor: '#00D26A',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94A3B8' } },
+            x: { grid: { display: false }, ticks: { color: '#94A3B8' } }
+          }
+        }
+      });
+    }
+
+    function renderTypeChart(trainings) {
+      const ctx = document.getElementById('typeChart').getContext('2d');
+      if (charts.type) charts.type.destroy();
+
+      const typeCount = {};
+      trainings.forEach(t => {
+        if (t.type && t.type !== '休息日') {
+          typeCount[t.type] = (typeCount[t.type] || 0) + 1;
+        }
+      });
+
+      const labels = Object.keys(typeCount);
+      const data = Object.values(typeCount);
+      const colors = ['#00D26A', '#3B82F6', '#FF6B35', '#A855F7', '#F59E0B', '#EC4899'];
+
+      if (labels.length === 0) {
+        labels.push('暂无数据');
+        data.push(1);
+      }
+
+      charts.type = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{ data: data, backgroundColor: labels.length === 1 ? '#334155' : colors.slice(0, labels.length), borderWidth: 0 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right', labels: { color: '#94A3B8', padding: 10, font: { size: 11 } } } }
+        }
+      });
+    }
+
+    function renderFatigueChart(dates, recoveries) {
+      const ctx = document.getElementById('fatigueChart').getContext('2d');
+      if (charts.fatigue) charts.fatigue.destroy();
+
+      const data = dates.map(date => {
+        const r = recoveries.find(rec => rec.date === date);
+        return r ? r.fatigue : null;
+      });
+
+      charts.fatigue = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['一', '二', '三', '四', '五', '六', '日'],
+          datasets: [{
+            label: '疲劳指数',
+            data: data,
+            borderColor: '#FF6B35',
+            backgroundColor: 'rgba(255, 107, 53, 0.1)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#FF6B35'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 1, max: 10, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94A3B8' } },
+            x: { grid: { display: false }, ticks: { color: '#94A3B8' } }
+          }
+        }
+      });
+    }
+
+    function generateWeeklyReport(trainings, recoveries, totalDistance) {
+      const report = [];
+
+      if (totalDistance >= 50) {
+        report.push({ type: 'good', title: '跑量达标', desc: `本周跑量${totalDistance.toFixed(1)}km，训练量充足。` });
+      } else if (totalDistance > 0) {
+        report.push({ type: 'warning', title: '跑量偏少', desc: `本周跑量${totalDistance.toFixed(1)}km，建议增加训练量至50km以上。` });
+      } else {
+        report.push({ type: 'warning', title: '无训练记录', desc: '本周暂无训练记录，请尽快开始训练。' });
+      }
+
+      const injuries = loadFromStorage('injury');
+      const weekDates = getWeekDates(currentWeekOffset);
+      const weekInjuries = injuries.filter(i => weekDates.includes(i.date));
+
+      if (weekInjuries.length > 0) {
+        report.push({ type: 'danger', title: '伤病提醒', desc: `本周记录了${weekInjuries.length}次伤病，请注意休息和恢复。` });
+      }
+
+      const avgFatigue = recoveries.length > 0 ? (recoveries.reduce((sum, r) => sum + (r.fatigue || 0), 0) / recoveries.length).toFixed(1) : 0;
+
+      if (avgFatigue >= 7) {
+        report.push({ type: 'warning', title: '疲劳累积', desc: `平均疲劳指数${avgFatigue}，建议安排轻松休息日。` });
+      } else if (avgFatigue > 0) {
+        report.push({ type: 'good', title: '恢复状态良好', desc: `平均疲劳指数${avgFatigue}，身体恢复情况良好。` });
+      }
+
+      const longRuns = trainings.filter(t => t.type === '长跑').length;
+      if (longRuns >= 1) {
+        report.push({ type: 'good', title: '长距离训练', desc: `完成${longRuns}次长跑，为耐力打下基础。` });
+      }
+
+      renderAnalysisItems(report, 'weeklyReport');
+    }
+
+    // Goals
+    function loadGoals() {
+      const goals = loadFromStorage('goals');
+      const container = document.getElementById('goalsList');
+
+      if (goals.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+            <div class="title">暂无目标</div>
+            <div class="desc">设置你的训练目标，开始追踪吧</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = goals.filter(g => !g.completed).map(goal => {
+        const percentage = Math.min(100, Math.round((goal.current / goal.target) * 100));
+        const remaining = Math.max(0, (goal.target - goal.current)).toFixed(1);
+        const daysLeft = Math.ceil((new Date(goal.deadline) - new Date()) / (1000 * 60 * 60 * 24));
+        const circumference = 2 * Math.PI * 40;
+        const offset = circumference - (percentage / 100) * circumference;
+
+        return `
+          <div class="goal-card">
+            <div class="goal-header">
+              <div>
+                <div class="goal-type">${goal.type}</div>
+                <div class="goal-title">${getGoalTitle(goal)}</div>
+                <div class="goal-deadline">剩余 ${Math.max(0, daysLeft)} 天</div>
+              </div>
+            </div>
+            <div class="goal-progress-ring ${percentage >= 100 ? 'completed' : ''}">
+              <svg viewBox="0 0 100 100">
+                <circle class="bg" cx="50" cy="50" r="40"/>
+                <circle class="progress" cx="50" cy="50" r="40" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
+              </svg>
+              <div class="center-text">
+                <div class="percentage">${percentage}%</div>
+                <div class="remaining">${remaining} 剩余</div>
+              </div>
+            </div>
+            <div class="goal-values">
+              <div class="goal-value">
+                <div class="value">${goal.current}</div>
+                <div class="label">当前</div>
+              </div>
+              <div class="goal-value">
+                <div class="value">${goal.target}</div>
+                <div class="label">目标</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getGoalTitle(goal) {
+      switch (goal.type) {
+        case '月跑量': return `${goal.target}公里月跑量`;
+        case '体重': return `体重降至${goal.target}kg`;
+        case '比赛配速': return `配速达到${goal.target}/km`;
+        case '连续训练': return `连续训练${goal.target}天`;
+        default: return goal.type;
+      }
+    }
+
+    function openGoalModal() {
+      document.getElementById('goalModal').classList.add('active');
+      document.getElementById('goalDeadline').value = getDateStr(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    }
+
+    function closeGoalModal() {
+      document.getElementById('goalModal').classList.remove('active');
+    }
+
+    function saveGoal() {
+      const type = document.getElementById('goalType').value;
+      const target = parseFloat(document.getElementById('goalTarget').value);
+      const current = parseFloat(document.getElementById('goalCurrent').value) || 0;
+      const deadline = document.getElementById('goalDeadline').value;
+
+      if (!target || !deadline) {
+        showToast('请填写完整信息', 'error');
+        return;
+      }
+
+      const goal = {
+        id: generateId(),
+        type: type,
+        target: target,
+        current: current,
+        deadline: deadline,
+        createdAt: getDateStr(),
+        completed: false
+      };
+
+      let goals = loadFromStorage('goals');
+      goals.push(goal);
+      saveToStorage('goals', goals);
+
+      closeGoalModal();
+      loadGoals();
+      showToast('目标创建成功', 'success');
+    }
+
+    // Training Plan Functions
+    function loadWeekPlan() {
+      const weekDates = getWeekDates(0);
+      const weekPlan = loadFromStorage('plan');
+      const trainings = loadFromStorage('training');
+      const today = getDateStr();
+
+      const container = document.getElementById('weekPlanList');
+
+      if (!weekPlan || !weekPlan.days || weekPlan.days.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+            <div class="title">暂无训练计划</div>
+            <div class="desc">导入预设模板或自定义本周训练计划</div>
+          </div>
+        `;
+        document.getElementById('planSummary').style.display = 'none';
+        return;
+      }
+
+      let completedCount = 0;
+      let totalDistance = 0;
+      let plannedDistance = 0;
+
+      const dayNames = ['一', '二', '三', '四', '五', '六', '日'];
+
+      container.innerHTML = weekDates.map((date, index) => {
+        const dayPlan = weekPlan.days[index] || '';
+        const training = trainings.find(t => t.date === date);
+        const isToday = date === today;
+        const isPast = new Date(date) < new Date(today);
+
+        let planType = '休息';
+        let planDistance = 0;
+        let planDetails = '休息日';
+
+        if (dayPlan && dayPlan !== '休息') {
+          const parts = dayPlan.split('-');
+          planType = parts[0];
+          planDistance = parseFloat(parts[1]) || 0;
+          planDetails = `${planDistance}km`;
+          plannedDistance += planDistance;
+        }
+
+        if (training && training.distance > 0) {
+          completedCount++;
+          totalDistance += training.distance;
+          return `
+            <div class="plan-card completed ${isToday ? 'today' : ''}" onclick="focusDay('${date}')">
+              <div class="plan-day ${isToday ? 'today' : isPast ? 'past' : ''}">
+                <span class="day-name">${dayNames[index]}</span>
+                <span class="day-num">${new Date(date).getDate()}</span>
+              </div>
+              <div class="plan-content">
+                <div class="plan-type">${training.type}</div>
+                <div class="plan-details">已完成 ${training.distance}km</div>
+              </div>
+              <div class="plan-status completed">
+                <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              </div>
+            </div>
+          `;
+        } else if (dayPlan && dayPlan !== '休息') {
+          return `
+            <div class="plan-card ${isToday ? 'today' : ''}" onclick="focusDay('${date}')">
+              <div class="plan-day ${isToday ? 'today' : isPast ? 'past' : ''}">
+                <span class="day-name">${dayNames[index]}</span>
+                <span class="day-num">${new Date(date).getDate()}</span>
+              </div>
+              <div class="plan-content">
+                <div class="plan-type">${planType}</div>
+                <div class="plan-details">计划 ${planDetails}</div>
+              </div>
+              <div class="plan-status pending"></div>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="plan-card ${isToday ? 'today' : ''}" onclick="focusDay('${date}')">
+              <div class="plan-day ${isToday ? 'today' : isPast ? 'past' : ''}">
+                <span class="day-name">${dayNames[index]}</span>
+                <span class="day-num">${new Date(date).getDate()}</span>
+              </div>
+              <div class="plan-content">
+                <div class="plan-type">休息日</div>
+                <div class="plan-details">恢复调整</div>
+              </div>
+              <div class="plan-status pending"></div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      // Update summary
+      document.getElementById('planSummary').style.display = 'flex';
+      document.getElementById('planTotalDistance').textContent = plannedDistance.toFixed(1);
+      document.getElementById('planCompleted').textContent = completedCount;
+      document.getElementById('planRemaining').textContent = weekDates.filter((d, i) => {
+        const plan = weekPlan.days[i];
+        const training = trainings.find(t => t.date === d);
+        return plan && plan !== '休息' && (!training || training.distance === 0);
+      }).length;
+    }
+
+    function focusDay(date) {
+      // Switch to today tab and show the date
+      document.querySelector('[data-tab="today"]').click();
+      showToast('已切换到记录页面', 'success');
+    }
+
+    function openPlanModal() {
+      document.getElementById('planModal').classList.add('active');
+      selectedTemplate = null;
+      document.querySelectorAll('.plan-template-item').forEach(el => el.classList.remove('selected'));
+      document.getElementById('customPlanSection').style.display = 'none';
+    }
+
+    function closePlanModal() {
+      document.getElementById('planModal').classList.remove('active');
+    }
+
+    function selectTemplate(templateId) {
+      selectedTemplate = templateId;
+      document.querySelectorAll('.plan-template-item').forEach(el => el.classList.remove('selected'));
+      document.getElementById('tpl-' + templateId).classList.add('selected');
+      document.getElementById('customPlanSection').style.display = 'none';
+    }
+
+    function importPlan() {
+      let weekPlan = { days: [], template: '', importedAt: getDateStr() };
+
+      // Priority: PDF data > Template > Custom
+      if (uploadedPdfData && uploadedPdfData.days) {
+        weekPlan.days = uploadedPdfData.days;
+        weekPlan.template = 'PDF导入计划';
+        uploadedPdfData = null;
+        clearPdfUpload();
+      } else if (selectedTemplate && PLAN_TEMPLATES[selectedTemplate]) {
+        weekPlan.days = [...PLAN_TEMPLATES[selectedTemplate].days];
+        weekPlan.template = PLAN_TEMPLATES[selectedTemplate].name;
+      } else {
+        // Custom plan
+        const customDays = [
+          document.getElementById('customMon').value,
+          document.getElementById('customTue').value,
+          document.getElementById('customWed').value,
+          document.getElementById('customThu').value,
+          document.getElementById('customFri').value,
+          document.getElementById('customSat').value,
+          document.getElementById('customSun').value
+        ];
+        weekPlan.days = customDays;
+        weekPlan.template = '自定义计划';
+      }
+
+      saveToStorage('plan', weekPlan);
+      closePlanModal();
+      loadWeekPlan();
+      showToast('训练计划已导入', 'success');
+    }
+
+    // Toast
+    /* ================= 三本账 · 教练强化系统 ================= */
+    // 按星期对应 DARKHORSE 课表节奏（Day1=周一 … Day7=周日）
+    const COACH_DAILY = {
+      1: { tag: '能量账',    color: '#00D26A', line: '今天练的是「省糖」：低强度 = 脂肪氧化占比最高的刺激', sub: '恢复跑别为凑量提速——强度上去就变成烧糖课，白练。' },
+      2: { tag: '阈值杠杆',  color: '#00D26A', line: '重复跑是后半程最大的杠杆：阈值 ↑ = 同样配速烧糖更慢', sub: '组间别吞间歇，质量优先于完成感。' },
+      3: { tag: '结构账',    color: '#3B82F6', line: '3 万次冲击后还剩多少输出，是今天练出来的', sub: '负重力量全年不断；赛前 10 天才停大重量。' },
+      4: { tag: '代谢弹性',  color: '#00D26A', line: '变速跑练的是配速变化下的糖酵解-有氧循环', sub: '慢段真的慢，快段别抢组。' },
+      5: { tag: '能量账',    color: '#00D26A', line: '轻松跑的心率，决定周末长距离的质量', sub: '恢复不是偷懒，是给能量账扩容。' },
+      6: { tag: '比赛彩排',  color: '#FF6B35', line: '长距离日 = 比赛彩排日，不是普通跑步', sub: '每 20–25 min 一支胶+水 · 只用比赛日同款 · 跑完做解耦检查。' },
+      0: { tag: '热账+结构', color: '#FF6B35', line: '夏训力量日：结构账之外，热适应正在送你有氧能力', sub: '高温天按心率不按表——热账常常比糖原先崩。' }
+    };
+    const COACH_TYPE_TIPS = {
+      '长跑':     '⚡ 彩排模式：60–90 g/h · 每 20–25 min 一支胶+水 · 只用比赛日同款。≥90 min 跑完记得做解耦检查。',
+      '间歇跑':   '⚡ 阈值 = 第一杠杆：组间别吞间歇，质量优先于完成感。',
+      '节奏跑':   '⚡ 节奏跑抬的是「烧糖速率」的分水岭：配速宁稳勿抢。',
+      'E跑':      '⚡ 低强度 = 脂肪氧化底座：别提速，强度上去就变成烧糖课。',
+      '力量训练': '🦵 结构账：全年不断，赛前 10 天停大重量。',
+      '交叉训练': '🦵 结构账的替代刺激：心肺在线、冲击归零。',
+      '休息日':   '恢复也是训练：晨脉+睡眠记一下——结构账在修复中。'
+    };
+
+    function initCoach() {
+      renderCoachBanner();
+      const sel = document.getElementById('trainingType');
+      if (sel) sel.addEventListener('change', renderTypeTip);
+      maybeShowDecoupling();
+    }
+
+    function renderCoachBanner() {
+      const d = COACH_DAILY[new Date().getDay()];
+      const tag = document.getElementById('cbTag');
+      tag.textContent = d.tag;
+      tag.style.background = d.color;
+      document.getElementById('cbLine').textContent = d.line;
+      document.getElementById('cbSub').textContent = d.sub;
+    }
+
+    function renderTypeTip() {
+      const tip = document.getElementById('typeTip');
+      const t = COACH_TYPE_TIPS[this.value];
+      if (t) { tip.textContent = t; tip.style.display = 'block'; }
+      else { tip.style.display = 'none'; }
+    }
+
+    function coachAfterSave(type, distance, duration) {
+      if (type === '长跑' && duration >= 90) {
+        showDecouplingCard();
+        showToast('长跑 ≥90min：顺手做解耦检查 👇', 'success');
+      }
+    }
+
+    function showDecouplingCard() {
+      const c = document.getElementById('decouplingCard');
+      if (c) c.style.display = 'block';
+    }
+
+    function dismissDecoupling() {
+      document.getElementById('decouplingCard').style.display = 'none';
+      localStorage.setItem('marathon_decoupling_dismissed', getDateStr());
+    }
+
+    function maybeShowDecoupling() {
+      if (localStorage.getItem('marathon_decoupling_dismissed') === getDateStr()) return;
+      const trainings = loadFromStorage('training');
+      const t = trainings.find(x => x.date === getDateStr());
+      if (!t || t.type !== '长跑' || (t.duration || 0) < 90) return;
+      const done = JSON.parse(localStorage.getItem('marathon_decoupling_records') || '[]')
+        .some(x => x.date === getDateStr());
+      if (!done) showDecouplingCard();
+    }
+
+    function parsePace(str) {
+      if (!str) return 0;
+      str = String(str).trim();
+      if (str.includes(':')) {
+        const parts = str.split(':').map(Number);
+        return (parts[0] || 0) + (parts[1] || 0) / 60;
+      }
+      return parseFloat(str) || 0;
+    }
+
+    function calcDecoupling() {
+      const p1 = parsePace(document.getElementById('dcPace1').value);
+      const p2 = parsePace(document.getElementById('dcPace2').value);
+      const h1 = parseFloat(document.getElementById('dcHr1').value);
+      const h2 = parseFloat(document.getElementById('dcHr2').value);
+      const out = document.getElementById('dcResult');
+      if (!p1 || !p2 || !h1 || !h2) {
+        out.innerHTML = '<span class="dc-warn">四项都要填（配速格式 5:10 或 5.17）</span>';
+        return;
+      }
+      const r1 = (60 / p1) / h1, r2 = (60 / p2) / h2;
+      const drift = (r1 - r2) / r1 * 100;
+      let cls, verdict;
+      if (drift < 5)       { cls = 'dc-good'; verdict = '✅ 三本账执行正常，保持'; }
+      else if (drift <= 8) { cls = 'dc-warn'; verdict = '⚠️ 能量账或热账在漏：先查补糖总量和补液'; }
+      else                 { cls = 'dc-bad';  verdict = '🔴 透支：先排查气温/爬升/配速错误，下周主动降量'; }
+      out.innerHTML = `漂移 <b>${drift.toFixed(1)}%</b> · <span class="${cls}">${verdict}</span>`;
+      const list = JSON.parse(localStorage.getItem('marathon_decoupling_records') || '[]');
+      list.push({ id: generateId(), date: getDateStr(), drift: +drift.toFixed(1) });
+      localStorage.setItem('marathon_decoupling_records', JSON.stringify(list));
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toastMessage');
+
+      toast.className = 'toast ' + type;
+      toastMessage.textContent = message;
+
+      const icon = type === 'success'
+        ? '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>'
+        : '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>';
+
+      toast.querySelector('.toast-icon').innerHTML = icon;
+      toast.classList.add('show');
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // PDF Upload and Parsing
+    let uploadedPdfData = null;
+
+    async function handlePdfUpload(event) {
+      const file = event.target.files[0];
+      if (!file || file.type !== 'application/pdf') {
+        showToast('请上传PDF文件', 'error');
+        return;
+      }
+
+      showToast('正在解析PDF...', 'success');
+
+      try {
+        // Read PDF using PDF.js
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          fullText += pageText + '\n';
+        }
+
+        // Parse the extracted text
+        const parsedPlan = parseTrainingPlan(fullText);
+        uploadedPdfData = parsedPlan;
+
+        // Show preview
+        document.getElementById('pdfPreview').style.display = 'block';
+        document.getElementById('pdfFileName').textContent = file.name;
+        
+        const preview = document.getElementById('parsedPlanPreview');
+        preview.innerHTML = parsedPlan.days.map((day, i) => {
+          const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+          return `<div style="margin: 8px 0; padding: 8px; background: var(--surface-light); border-radius: 6px;">
+            <strong>${dayNames[i]}</strong>: ${day || '休息日'}
+          </div>`;
+        }).join('');
+
+        // Clear template selection
+        selectedTemplate = null;
+        document.querySelectorAll('.plan-template-item').forEach(el => el.classList.remove('selected'));
+
+        showToast('PDF解析成功！', 'success');
+      } catch (error) {
+        console.error('PDF parsing error:', error);
+        showToast('PDF解析失败，请重试', 'error');
+      }
+    }
+
+    function parseTrainingPlan(text) {
+      const days = ['', '', '', '', '', '', ''];
+      
+      // Clean text for better parsing
+      text = text.replace(/\s+/g, ' ').trim();
+
+      // Enhanced parsing for DARKHORSE format
+      // Pattern: DAY 1 (or DAY 1/第一天) followed by training content
+      const dayMatches = text.match(/DAY\s*(\d+)[/\s]*(.*?)(?=DAY\s*\d+|本周建议总里程|总里程|$)/gis);
+      
+      if (dayMatches && dayMatches.length > 0) {
+        dayMatches.forEach((match) => {
+          const dayNumMatch = match.match(/DAY\s*(\d+)/i);
+          if (dayNumMatch) {
+            const dayIndex = parseInt(dayNumMatch[1]) - 1;
+            if (dayIndex >= 0 && dayIndex < 7) {
+              let trainingInfo = '';
+              
+              // Extract distance range (e.g., "12-14km" or "12~14km")
+              const distanceRangeMatch = match.match(/(\d+)[-~](\d+)\s*[kK公里]/i);
+              let distance = 0;
+              if (distanceRangeMatch) {
+                distance = Math.round((parseInt(distanceRangeMatch[1]) + parseInt(distanceRangeMatch[2])) / 2);
+              } else {
+                const singleDistMatch = match.match(/(\d+)\s*[kK公里]/i);
+                if (singleDistMatch) {
+                  distance = parseInt(singleDistMatch[1]);
+                }
+              }
+              
+              // Determine training type with priority order
+              if (/重复跑|3km\s*[×x×]\s*\d+组|间歇.*?km/i.test(match)) {
+                // Repeat training like "3km × 4组"
+                const repeatMatch = match.match(/(\d+)km\s*[×x×]\s*(\d+)组/i);
+                if (repeatMatch) {
+                  const reps = parseInt(repeatMatch[2]);
+                  trainingInfo = `间歇跑-${parseInt(repeatMatch[1])}-${reps * 10}`;
+                } else {
+                  trainingInfo = distance > 0 ? `间歇跑-${distance}-40` : '间歇跑-12-40';
+                }
+              } else if (/速度训练|变速跑|400米慢.*?800米快/i.test(match)) {
+                // Speed training like "400米慢 + 800米快"
+                trainingInfo = distance > 0 ? `速度训练-${distance}-50` : '速度训练-10-50';
+              } else if (/耐力训练|匀速耐力跑|45km.*?耐力/i.test(match)) {
+                // Endurance training
+                trainingInfo = distance > 0 ? `耐力跑-${distance}-${Math.round(distance * 5)}` : '耐力跑-30-150';
+              } else if (/力量训练.*?髋关节|髋关节力量|负重.*?下肢|技术练习/i.test(match)) {
+                // Strength training
+                trainingInfo = '力量训练';
+              } else if (/恢复训练|放松慢跑|Easy\s*Run/i.test(match)) {
+                // Recovery run
+                if (distance > 0) {
+                  trainingInfo = `E跑-${distance}-${Math.round(distance * 6)}`;
+                } else {
+                  trainingInfo = 'E跑-12-72';
+                }
+              } else if (/节奏跑|tempo/i.test(match)) {
+                if (distance > 0) {
+                  trainingInfo = `节奏跑-${distance}-${Math.round(distance * 5)}`;
+                } else {
+                  trainingInfo = '节奏跑-12-60';
+                }
+              } else if (/长跑/i.test(match)) {
+                if (distance > 0) {
+                  trainingInfo = `长跑-${distance}-${Math.round(distance * 6)}`;
+                } else {
+                  trainingInfo = '长跑-20-120';
+                }
+              } else if (/交叉训练/i.test(match)) {
+                trainingInfo = '交叉训练';
+              } else if (/休息/i.test(match)) {
+                trainingInfo = '';
+              } else if (distance > 0) {
+                trainingInfo = `E跑-${distance}-${Math.round(distance * 6)}`;
+              }
+
+              if (trainingInfo) {
+                days[dayIndex] = trainingInfo;
+              }
+            }
+          }
+        });
+      }
+
+      // If no structured data found, try alternative parsing
+      // Look for specific training types with distances
+      if (days.every(d => d === '')) {
+        const lines = text.split(/[.。\n]/);
+        let dayCounter = 0;
+        
+        for (const line of lines) {
+          if (dayCounter >= 7) break;
+          
+          if (/DAY\s*(\d+)/i.test(line)) {
+            const dayMatch = line.match(/DAY\s*(\d+)/i);
+            if (dayMatch) {
+              dayCounter = parseInt(dayMatch[1]) - 1;
+            }
+          }
+          
+          if (dayCounter >= 0 && dayCounter < 7) {
+            const distanceMatch = line.match(/(\d+)\s*[-~]?\s*(\d+)?\s*[kK公里]/);
+            let distance = 0;
+            if (distanceMatch) {
+              distance = parseInt(distanceMatch[1]);
+            }
+            
+            if (/间歇/i.test(line)) {
+              days[dayCounter] = distance > 0 ? `间歇跑-${distance}-${Math.round(distance * 6)}` : '间歇跑-6-40';
+            } else if (/节奏|tempo/i.test(line)) {
+              days[dayCounter] = distance > 0 ? `节奏跑-${distance}-${Math.round(distance * 5)}` : '节奏跑-10-50';
+            } else if (/长跑/i.test(line)) {
+              days[dayCounter] = distance > 0 ? `长跑-${distance}-${Math.round(distance * 6)}` : '长跑-15-90';
+            } else if (/力量/i.test(line)) {
+              days[dayCounter] = '力量训练';
+            } else if (distance > 0 && /跑/i.test(line)) {
+              days[dayCounter] = `E跑-${distance}-${Math.round(distance * 6)}`;
+            } else if (/休息/i.test(line)) {
+              days[dayCounter] = '';
+            }
+            
+            if (days[dayCounter] && /DAY\s*(\d+)/i.test(line)) {
+              dayCounter++;
+            }
+          }
+        }
+      }
+
+      return { days, rawText: text };
+    }
+
+    function clearPdfUpload() {
+      uploadedPdfData = null;
+      document.getElementById('pdfPreview').style.display = 'none';
+      document.getElementById('pdfInput').value = '';
+    }
+
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+</body>
+</html>
