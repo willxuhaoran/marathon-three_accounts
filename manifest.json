@@ -1,0 +1,15 @@
+{
+  "name": "三本账 · 后半程不撞墙",
+  "short_name": "三本账",
+  "description": "马拉松后半程训练记录与周报系统：后半程 = min(能量账, 热账, 结构账)",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
