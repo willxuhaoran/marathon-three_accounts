@@ -3408,7 +3408,7 @@
       const lines = t.split('\n');
       const paceLn = l => l.match(/(\d{1,2})\s*['’‘°]\s*(\d{2})\s*["″]?/) || l.match(/\b(\d{1,2}):(\d{2})\s*["″]?\s*\/\s*km/);
       const hrIn = l => {
-        if (l.includes(':') || l.includes('%') || /spm|kcal|km\/h|表现|负荷|上升|下降/i.test(l)) return null;
+        if (l.includes(':') || l.includes('%') || l.includes('.') || /spm|kcal|km\/h|表现|负荷|上升|下降/i.test(l)) return null;
         const ms = l.match(/\d{2,3}/g);
         if (!ms || ms.length > 2) return null; // 多数字行多为坐标刻度
         for (const s of ms) { const n = parseInt(s); if (n >= 90 && n <= 200) return n; }
@@ -3539,7 +3539,10 @@
       // 强度区间
       if (r.zones && r.zones.length) {
         const top = r.zones.reduce((x, y) => (y.pct > x.pct ? y : x));
-        if (top.pct >= 50) bullets.push(`强度分布：${top.pct}% 落在${top.name}——主体是${/恢复|耐力/.test(top.name) ? '一堂扎实有氧课' : '一堂强度课'}`);
+        if (top.pct >= 50) {
+          const desc = /恢复/.test(top.name) ? '恢复性慢跑' : /耐力/.test(top.name) ? '扎实有氧课' : '强度课';
+          bullets.push(`强度分布：${top.pct}% 落在${top.name}——主体是${desc}`);
+        }
       }
 
       // 天气提示
