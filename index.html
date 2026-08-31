@@ -1659,7 +1659,7 @@
             </div>
             <!-- 识别结果（系统自动生成，只读） -->
             <div id="autoResult" style="margin:-6px 0 14px;padding:12px 14px;background:rgba(0,210,106,.06);border:1px solid rgba(0,210,106,.3);border-radius:10px">
-              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">🤖 系统识别结果（截图 / 文字自动生成）</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">🤖 系统识别结果（自动生成 · 点 chip 可手动修改）</div>
               <div id="autoResultChips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
             </div>
             <div class="type-tip" id="typeTip" style="display:none"></div>
@@ -3299,19 +3299,28 @@
         if (dm) r.date = `${new Date().getFullYear()}-${String(dm[1]).padStart(2, '0')}-${String(dm[2]).padStart(2, '0')}`;
       }
 
-      // 距离：收集全部候选（标签邻近 + 所有 km 值，排除 km/h 和过小值），取最大
-      const distCands = [];
-      const pushIf = v => { if (v >= 3) distCands.push(v); };
+      // 距离：标签邻近值优先；裸 km 最大值须超过标签值 2.2 倍才可信（防地图/图表幽灵值，保分组选择器正例）
+      const labeled = [];
+      const pushL = v => { if (v >= 3) labeled.push(v); };
       const dRx1 = /(\d+(?:\.\d+)?)\s*(?:公里|千米|km)?[^0-9]{0,6}距离/gi;
       const dRx2 = /距离[^0-9]{0,6}(\d+(?:\.\d+)?)(?!\s*[:：])/gi;
       let dm2;
-      while ((dm2 = dRx1.exec(t)) !== null) pushIf(parseFloat(dm2[1]));
-      while ((dm2 = dRx2.exec(t)) !== null) pushIf(parseFloat(dm2[1]));
-      [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km(?!\/h)|k\b)/gi)].forEach(m => pushIf(parseFloat(m[1])));
-      if (distCands.length) r.distance = Math.max(...distCands);
+      while ((dm2 = dRx1.exec(t)) !== null) pushL(parseFloat(dm2[1]));
+      while ((dm2 = dRx2.exec(t)) !== null) pushL(parseFloat(dm2[1]));
+      const kmAll = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km(?!\/h)|k\b)/gi)].map(m => parseFloat(m[1]));
+      const labMax = labeled.length ? Math.max(...labeled) : 0;
+      const kmMax = kmAll.length ? Math.max(...kmAll) : 0;
+      if (labMax && kmMax > labMax * 2.2) r.distance = kmMax;
+      else if (labMax) r.distance = labMax;
+      else if (kmMax) r.distance = kmMax;
 
-      // 时长：标签优先；裸 h:mm:ss 取最后一个（总计 > 累计分段）
-      const durL = grabLabeled(t, ['运动时间', '移动时间', '用时', '耗时', '时长'], '\\d{1,2}:\\d{2}(?::\\d{2})?');
+      // 时长：标签优先（两段式排除配速写法）；裸 h:mm:ss 取最后一个（总计 > 累计分段）
+      let durL = grabLabeled(t, ['运动时间', '移动时间', '用时', '耗时', '时长'], '\\d{1,2}:\\d{2}:\\d{2}');
+      if (!durL) {
+        const d2 = t.match(/(\d{1,2}:\d{2})(?!["′°\d])[^0-9]{0,12}(?:运动时间|移动时间|用时|耗时|时长)/)
+          || t.match(/(?:运动时间|移动时间|用时|耗时|时长)[^0-9]{0,12}(\d{1,2}:\d{2})(?!["′°\d])/);
+        if (d2) durL = d2[1];
+      }
       if (durL) r.duration = hmToMin(durL);
       if (!r.duration) {
         const hms = [...t.matchAll(/\b(\d{1,2}):(\d{2}):(\d{2})\b/g)];
@@ -3326,8 +3335,15 @@
         if (mm) r.duration = parseInt(mm[1]);
       }
 
-      // 配速：总计行（含纵向"总计"后10行内）> 平均配速 > 第一个 m'ss"（引号容忍 ° ″）
-      const paceOf = s => { const m = s.match(/(\d{1,2})\s*['’‘°]\s*(\d{2})\s*["″]?/); return m ? `${m[1]}'${m[2]}"` : null; };
+      // 配速：总计行（含纵向"总计"后10行内）> 平均配速 > 第一个（引号容忍 ° ″，冒号+km 也认）
+      const paceOf = s => {
+        const m1 = s.match(/(\d{1,2})\s*['’‘°]\s*(\d{2})\s*["″]?/);
+        const m2 = s.match(/\b(\d{1,2}):(\d{2})\s*["″]?\s*\/\s*km/); // OCR 把引号读成冒号：6:02" /km
+        let m = null;
+        if (m1 && m2) m = m1.index <= m2.index ? m1 : m2; // 取文中先出现的
+        else m = m1 || m2;
+        return m ? `${m[1]}'${m[2]}"` : null;
+      };
       const lines0 = t.split('\n');
       let paceStr = null;
       const totIdx = lines0.findIndex(l => /总计|合计/.test(l));
@@ -3390,7 +3406,7 @@
 
       // 分段渐进：每行配速向前≤8行（远→近）/向后≤2行找心率，折叠重复
       const lines = t.split('\n');
-      const paceLn = l => l.match(/(\d{1,2})\s*['’‘°]\s*(\d{2})\s*["″]?/);
+      const paceLn = l => l.match(/(\d{1,2})\s*['’‘°]\s*(\d{2})\s*["″]?/) || l.match(/\b(\d{1,2}):(\d{2})\s*["″]?\s*\/\s*km/);
       const hrIn = l => {
         if (l.includes(':') || l.includes('%') || /spm|kcal|km\/h|表现|负荷|上升|下降/i.test(l)) return null;
         const ms = l.match(/\d{2,3}/g);
@@ -3544,24 +3560,40 @@
         + `<div style="font-size:11px;color:var(--surface-lighter);margin-top:8px">以上是系统对图片的理解——和你实际跑的对不上时，八成是图传错了，重传或改用文字。</div>`;
     }
 
+    // 点 chip 手动修改：数字弹窗改值，类型/天气循环切换
+    function editChip(field, kind) {
+      const el = document.getElementById(field);
+      if (kind === 'num') {
+        const v = prompt('修改为：', el.value);
+        if (v !== null && v.trim() !== '') { el.value = parseFloat(v) || ''; renderAutoSummary(); }
+      } else {
+        const opts = [...el.options].map(o => o.value).filter(x => x);
+        el.value = opts[(opts.indexOf(el.value) + 1) % opts.length];
+        if (field === 'trainingType') renderTypeTip.call(el);
+        renderAutoSummary();
+      }
+    }
+
     // 识别结果面板：从隐藏字段读值实时渲染
     function renderAutoSummary() {
       const el = document.getElementById('autoResultChips');
       if (!el) return;
       const g = id => document.getElementById(id).value;
       const chips = [];
-      if (g('trainingType')) chips.push(['类型', g('trainingType')]);
-      if (g('trainingDistance')) chips.push(['距离', g('trainingDistance') + ' km']);
-      if (g('trainingDuration')) chips.push(['时长', fmtDur(parseInt(g('trainingDuration')))]);
+      if (g('trainingType')) chips.push(['类型', g('trainingType'), 'trainingType', 'cycle']);
+      if (g('trainingDistance')) chips.push(['距离', g('trainingDistance') + ' km', 'trainingDistance', 'num']);
+      if (g('trainingDuration')) chips.push(['时长', fmtDur(parseInt(g('trainingDuration'))), 'trainingDuration', 'num']);
       const dd = parseFloat(g('trainingDistance')), du = parseFloat(g('trainingDuration'));
+      let paceChip = '';
       if (dd > 0 && du > 0) {
         const p = du / dd, pm = Math.floor(p), ps = Math.round((p - pm) * 60);
-        chips.push(['配速', `${pm}'${String(ps).padStart(2, '0')}"`]);
+        paceChip = `<span class="chip2">配速 <b>${pm}'${String(ps).padStart(2, '0')}"</b></span>`;
       }
-      if (g('trainingHr')) chips.push(['均心率', g('trainingHr') + ' bpm']);
-      if (g('trainingWeather')) chips.push(['天气', g('trainingWeather')]);
+      if (g('trainingHr')) chips.push(['均心率', g('trainingHr') + ' bpm', 'trainingHr', 'num']);
+      if (g('trainingWeather')) chips.push(['天气', g('trainingWeather'), 'trainingWeather', 'cycle']);
       el.innerHTML = chips.length
-        ? chips.map(([k, v]) => `<span class="chip2">${k} <b>${v}</b></span>`).join('')
+        ? chips.map(([k, v, f, kind], i) =>
+            (i === 2 ? paceChip : '') + `<span class="chip2" style="cursor:pointer" title="点我修改" onclick="editChip('${f}','${kind}')">${k} <b>${v}</b></span>`).join('')
         : '<span style="color:var(--text-secondary);font-size:12.5px">等待识别——上传手表截图或粘贴文字，自动生成训练数据</span>';
     }
 
