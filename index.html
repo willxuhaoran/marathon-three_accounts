@@ -1481,6 +1481,9 @@
     /* 计划卡详情多行展示 + 日期输入暗色 */
     .plan-details { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.55; }
     #recordDate { color-scheme: dark; }
+    /* 识别结果 chips */
+    .chip2 { background: var(--surface-light); border: 1px solid var(--surface-lighter); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; white-space: nowrap; }
+    .chip2 b { color: var(--primary); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -1653,47 +1656,22 @@
               <div id="dayPlanText" style="font-size:12.5px;line-height:1.7;margin-top:6px"></div>
               <div id="dayPlanTip" style="color:var(--text-secondary);font-size:12px;margin-top:6px;line-height:1.6"></div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">训练类型</label>
-                <select class="form-input" id="trainingType">
-                  <option value="">选择类型</option>
-                  <option value="长跑">长跑</option>
-                  <option value="间歇跑">间歇跑</option>
-                  <option value="节奏跑">节奏跑</option>
-                  <option value="E跑">E跑(轻松跑)</option>
-                  <option value="力量训练">力量训练</option>
-                  <option value="交叉训练">交叉训练</option>
-                  <option value="休息日">休息日</option>
-                </select>
-              </div>
-              <div class="type-tip" id="typeTip" style="display:none"></div>
-              <div class="form-group">
-                <label class="form-label">天气</label>
-                <select class="form-input" id="trainingWeather">
-                  <option value="">选择天气</option>
-                  <option value="晴">晴</option>
-                  <option value="阴">阴</option>
-                  <option value="小雨">小雨</option>
-                  <option value="大雨">大雨</option>
-                  <option value="雪">雪</option>
-                  <option value="高温">高温</option>
-                  <option value="低温">低温</option>
-                </select>
-              </div>
+            <!-- 识别结果（系统自动生成，只读） -->
+            <div id="autoResult" style="margin:-6px 0 14px;padding:12px 14px;background:rgba(0,210,106,.06);border:1px solid rgba(0,210,106,.3);border-radius:10px">
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">🤖 系统识别结果（截图 / 文字自动生成）</div>
+              <div id="autoResultChips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">距离 (km)</label>
-                <input type="number" class="form-input" id="trainingDistance" placeholder="0" step="0.01" min="0">
-              </div>
-              <div class="form-group">
-                <label class="form-label">时长 (分钟)</label>
-                <input type="number" class="form-input" id="trainingDuration" placeholder="0" min="0">
-              </div>
+            <div class="type-tip" id="typeTip" style="display:none"></div>
+            <!-- 数据字段：仅由识别/课表写入 -->
+            <div style="display:none">
+              <select id="trainingType"><option value="">选择类型</option><option value="长跑">长跑</option><option value="间歇跑">间歇跑</option><option value="节奏跑">节奏跑</option><option value="E跑">E跑(轻松跑)</option><option value="力量训练">力量训练</option><option value="交叉训练">交叉训练</option><option value="休息日">休息日</option></select>
+              <select id="trainingWeather"><option value="">选择天气</option><option value="晴">晴</option><option value="阴">阴</option><option value="小雨">小雨</option><option value="大雨">大雨</option><option value="雪">雪</option><option value="高温">高温</option><option value="低温">低温</option></select>
+              <input type="number" id="trainingDistance">
+              <input type="number" id="trainingDuration">
+              <input type="number" id="trainingHr">
             </div>
             <div class="form-group">
-              <label class="form-label">主观感受 (RPE 1-10)</label>
+              <label class="form-label">1️⃣ 主观感受 (RPE 1-10)</label>
               <div class="range-container">
                 <div class="range-labels">
                   <span>轻松</span>
@@ -1703,29 +1681,23 @@
                 <div class="range-value" id="rpeValue">5</div>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">平均心率 (bpm)</label>
-                <input type="number" class="form-input" id="trainingHr" placeholder="选填" min="60" max="220">
-              </div>
-              <div class="form-group">
-                <label class="form-label">计划完成度</label>
-                <select class="form-input" id="trainingCompletion">
-                  <option value="按计划完成">按计划完成</option>
-                  <option value="超额完成">超额完成</option>
-                  <option value="打折完成">打折完成</option>
-                  <option value="未完成">未完成</option>
-                  <option value="临时调整">临时调整</option>
-                </select>
-              </div>
+            <div class="form-group">
+              <label class="form-label">2️⃣ 计划完成度</label>
+              <select class="form-input" id="trainingCompletion">
+                <option value="按计划完成">按计划完成</option>
+                <option value="超额完成">超额完成</option>
+                <option value="打折完成">打折完成</option>
+                <option value="未完成">未完成</option>
+                <option value="临时调整">临时调整</option>
+              </select>
             </div>
             <div class="form-group full">
-              <label class="form-label">额外训练（周报需要）</label>
+              <label class="form-label">3️⃣ 额外训练（可填写）</label>
               <input type="text" class="form-input" id="trainingExtra" placeholder="如：核心+上肢40min、hyrox、陪跑20k；无则留空">
             </div>
             <div class="form-group full">
-              <label class="form-label">备注</label>
-              <textarea class="form-input" id="trainingNotes" placeholder="训练感受、特殊情况..."></textarea>
+              <label class="form-label">4️⃣ 备注</label>
+              <textarea class="form-input" id="trainingNotes" placeholder="自动总结会填在这里，可改可补充"></textarea>
             </div>
           </div>
         </div>
@@ -3444,7 +3416,68 @@
         r.progress = `配速渐进 ${folded[0].pace}→${folded[folded.length - 1].pace}｜心率渐进 ${folded[0].hr}→${folded[folded.length - 1].hr}`;
       }
 
+      // ---- 天气：雨雪关键词 > 温度映射 ----
+      if (/大雨|暴雨/.test(t)) r.weather = '大雨';
+      else if (/小雨|中雨|雷雨|下雨/.test(t)) r.weather = '小雨';
+      else if (/雪/.test(t)) r.weather = '雪';
+      else {
+        const tm = t.match(/(-?\d{1,2})\s*°\s*C/i);
+        if (tm) { const tp = parseInt(tm[1]); r.weather = tp >= 27 ? '高温' : tp <= 8 ? '低温' : (/阴|多云/.test(t) ? '阴' : '晴'); }
+        else if (/阴|多云/.test(t)) r.weather = '阴';
+      }
+
+      // ---- 类型兜底：无关键词时的"运动理解"推断 ----
+      if (!r.type) {
+        if (/力量|核心|hyrox|举重|深蹲|体能/i.test(t)) r.type = '力量训练';
+        else if (/骑行|游泳|划船|椭圆|单车/i.test(t)) r.type = '交叉训练';
+        else if (r.distance && (r.duration || r.pace)) r.type = r.distance >= 15 ? '长跑' : 'E跑';
+      }
+
+      // ---- 人话总结（智能化总结，进备注） ----
+      r.narrative = buildNarrative(r);
+
       return r;
+    }
+
+    function fmtDur(min) {
+      if (!min) return '';
+      if (min >= 60) { const h = Math.floor(min / 60), m = Math.round(min % 60); return `${h}小时${String(m).padStart(2, '0')}分`; }
+      return `${min}分钟`;
+    }
+
+    // 人话总结生成器（单图解析与多图合并共用）
+    function buildNarrative(r) {
+      const nb = [];
+      if (r.type) nb.push(r.type);
+      if (r.distance) nb.push(`${r.distance}km`);
+      if (r.duration) nb.push(fmtDur(r.duration));
+      if (r.paceStr) nb.push(`均配${r.paceStr}` + (r.fastest ? `(最快${r.fastest})` : ''));
+      if (r.hr) nb.push(`均心率${r.hr}` + (r.hrMax ? `(最大${r.hrMax})` : ''));
+      if (r.weather) nb.push(`天气${r.weather}`);
+      nb.push(...new Set(r.extras || []));
+      if (r.progress) nb.push(r.progress);
+      return nb.join(' · ');
+    }
+
+    // 识别结果面板：从隐藏字段读值实时渲染
+    function renderAutoSummary() {
+      const el = document.getElementById('autoResultChips');
+      if (!el) return;
+      const g = id => document.getElementById(id).value;
+      const chips = [];
+      if (g('trainingType')) chips.push(['类型', g('trainingType')]);
+      if (g('trainingDistance')) chips.push(['距离', g('trainingDistance') + ' km']);
+      if (g('trainingDuration')) chips.push(['时长', fmtDur(parseInt(g('trainingDuration')))]);
+      const dd = parseFloat(g('trainingDistance')), du = parseFloat(g('trainingDuration'));
+      if (dd > 0 && du > 0) {
+        const p = du / dd, pm = Math.floor(p), ps = Math.round((p - pm) * 60);
+        chips.push(['配速', `${pm}'${String(ps).padStart(2, '0')}"`]);
+      }
+      if (g('trainingHr')) chips.push(['均心率', g('trainingHr') + ' bpm']);
+      if (g('trainingWeather')) chips.push(['天气', g('trainingWeather')]);
+      el.innerHTML = chips.length
+        ? chips.map(([k, v]) => `<span class="chip2">${k} <b>${v}</b></span>`).join('')
+        : '<span style="color:var(--text-secondary);font-size:12.5px">等待识别——上传手表截图或粘贴文字，自动生成训练数据</span>';
     }
 
     function parseAndFill(text) {
@@ -3454,13 +3487,14 @@
     // 多图合并：核心字段先见先得，扩展数据按类去重
     function mergeParsed(a, b) {
       const m = { extras: [] };
-      ['date', 'distance', 'duration', 'pace', 'paceStr', 'fastest', 'hr', 'hrMax', 'type', 'progress']
+      ['date', 'distance', 'duration', 'pace', 'paceStr', 'fastest', 'hr', 'hrMax', 'type', 'weather', 'progress']
         .forEach(k => { m[k] = (a[k] !== undefined && a[k] !== '') ? a[k] : b[k]; });
       const seen = new Set();
       [...a.extras, ...b.extras].forEach(x => {
         const key = x.replace(/\d.*/, '');
         if (!seen.has(key)) { seen.add(key); m.extras.push(x); }
       });
+      m.narrative = buildNarrative(m);
       return m;
     }
 
@@ -3471,21 +3505,18 @@
       if (r.distance) { document.getElementById('trainingDistance').value = r.distance; filled.push('距离'); }
       if (r.duration) { document.getElementById('trainingDuration').value = r.duration; filled.push('时长'); }
       if (r.hr) { document.getElementById('trainingHr').value = r.hr; filled.push('心率'); }
-      // 分析数据 → 备注（仅当备注为空），并在识别区展示
-      const bits = [];
-      if (r.paceStr) bits.push(`均配${r.paceStr}` + (r.fastest ? `(最快${r.fastest})` : ''));
-      if (r.hr) bits.push(`均心率${r.hr}` + (r.hrMax ? `(最大${r.hrMax})` : ''));
-      bits.push(...new Set(r.extras));
-      if (r.progress) bits.push(r.progress);
-      if (bits.length) {
+      if (r.weather) { document.getElementById('trainingWeather').value = r.weather; filled.push('天气'); }
+      // 智能化总结 → 备注（仅当备注为空），并在识别区展示
+      if (r.narrative) {
         const notesEl = document.getElementById('trainingNotes');
-        if (!notesEl.value.trim()) { notesEl.value = bits.join(' '); filled.push('备注'); }
+        if (!notesEl.value.trim()) { notesEl.value = r.narrative; filled.push('备注'); }
         const prog = document.getElementById('ocrProgress');
-        if (prog) prog.textContent = '✅ ' + bits.join(' ');
+        if (prog) prog.textContent = '✅ ' + r.narrative;
       }
       renderTypeTip.call(document.getElementById('trainingType'));
+      renderAutoSummary();
       document.getElementById('section-training').classList.add('expanded');
-      if (filled.length) showToast(`已识别填入：${filled.join('、')}，请核对后保存`, 'success');
+      if (filled.length) showToast(`已生成记录草稿：${filled.join('、')}，补充主观项后保存`, 'success');
       else showToast('没识别出有效数据，换个写法试试', 'error');
     }
 
@@ -3671,6 +3702,7 @@
         set('trainingCompletion', '按计划完成');
       }
       renderTypeTip.call(document.getElementById('trainingType'));
+      renderAutoSummary();
     }
 
     // 从计划文本猜测训练类型（用于预填）
@@ -3679,7 +3711,8 @@
       if (/休息/.test(text)) return '休息日';
       if (/间歇|重复|变速/.test(text)) return '间歇跑';
       if (/节奏|tempo/i.test(text)) return '节奏跑';
-      if (/力量|核心|技术练习/.test(text)) return '力量训练';
+      if (/力量|核心|技术练习|hyrox|体能训练/i.test(text)) return '力量训练';
+      if (/骑行|游泳|划船|椭圆|单车|桨板/i.test(text)) return '交叉训练';
       if (/长跑|长距离|lsd|稳定配速|耐力跑|耐力训练/i.test(text)) return '长跑';
       if (/恢复跑|恢复训练|恢复日|放松|慢跑|轻松|E跑/i.test(text)) return 'E跑';
       return '';
