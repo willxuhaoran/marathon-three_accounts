@@ -1625,6 +1625,7 @@
           <input type="file" id="watchShotInput" accept="image/*" multiple style="display:none" onchange="handleWatchScreenshot(this)">
           <textarea class="form-input" id="smartText" rows="3" style="margin-top:10px" placeholder="点「上传手表截图」自动识别佳明/高驰数据；或在此粘贴输入文字，如：轻松跑 14.28km 用时1:16:14 配速5'20 心率138 —— 识别后自动填入下方表单，核对无误再保存"></textarea>
           <div id="ocrProgress" style="margin-top:8px;font-size:12.5px;color:var(--text-secondary)"></div>
+          <div id="insightBox" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:10px"></div>
         </div>
 
         <!-- Form Sections -->
@@ -3413,8 +3414,23 @@
       });
       const folded = pairs.filter((p, i) => i === 0 || p.hr !== pairs[i - 1].hr);
       if (folded.length >= 3) {
+        r.pairs = folded;
         r.progress = `配速渐进 ${folded[0].pace}→${folded[folded.length - 1].pace}｜心率渐进 ${folded[0].hr}→${folded[folded.length - 1].hr}`;
       }
+
+      // ---- 配速区间占比（长图，标签容错） ----
+      const zlines = t.split('\n');
+      r.zones = [];
+      [['积极恢复区', /恢复区/], ['有氧耐力区', /氧耐力区/], ['有氧动力区', /氧动力区/],
+       ['马拉松配速区', /马拉松配速/], ['乳酸阈区', /乳酸阈/], ['速度区', /速度(?!耐力)区/], ['无氧动力区', /无氧/]]
+        .forEach(([name, rx]) => {
+          const i = zlines.findIndex(l => rx.test(l));
+          if (i < 0) return;
+          for (let j = i; j <= Math.min(zlines.length - 1, i + 4); j++) {
+            const pm = zlines[j].match(/(\d{1,3})\s*%/);
+            if (pm) { r.zones.push({ name, pct: parseInt(pm[1]) }); break; }
+          }
+        });
 
       // ---- 天气：雨雪关键词 > 温度映射 ----
       if (/大雨|暴雨/.test(t)) r.weather = '大雨';
@@ -3459,6 +3475,75 @@
       return nb.join(' · ');
     }
 
+    function secToPace(sec) {
+      const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+      return `${m}'${String(s).padStart(2, '0')}"`;
+    }
+
+    // 🧠 智能解读：把识别数据"翻译"成对这次训练的理解
+    function buildInsight(r) {
+      const bullets = [], warns = [];
+      let head = '';
+      if (r.type === '力量训练') head = '这是一堂力量/体能课';
+      else if (r.type === '交叉训练') head = '这是一次交叉训练';
+      else if (r.distance >= 20) head = `这是一次 ${Math.round(r.distance)} 公里级的长距离拉练`;
+      else if (r.distance >= 12) head = '这是一次中等距离耐力课';
+      else if (r.distance > 0) head = '这是一次短距离跑步';
+      const facts = [];
+      if (r.duration) facts.push(fmtDur(r.duration));
+      if (r.paceStr) facts.push(`均配${r.paceStr}`);
+      if (r.hr) facts.push(`均心率${r.hr}`);
+      const summary = head ? head + (facts.length ? '：' + facts.join('，') + '。' : '。') : '';
+
+      // 配速形态 + 心率漂移（来自分段）
+      if (r.pairs && r.pairs.length >= 3) {
+        const ps = r.pairs.map(p => { const m = p.pace.match(/(\d)'(\d{2})/); return parseInt(m[1]) * 60 + parseInt(m[2]); });
+        const tail = Math.max(1, Math.floor(ps.length / 2));
+        const headN = ps.length - tail;
+        const a = ps.slice(0, headN).reduce((x, y) => x + y) / headN;
+        const b = ps.slice(headN).reduce((x, y) => x + y) / tail;
+        const diff = a - b;
+        if (diff >= 4) bullets.push(`配速形态：负分割，后半程快约 ${Math.round(diff)}″/km——高质量跑法，状态在线`);
+        else if (diff <= -4) bullets.push(`配速形态：后半程掉速约 ${Math.round(-diff)}″/km——前快后慢，下次起跑收一点`);
+        else bullets.push('配速形态：全程匀速，配速控制稳定');
+        const h0 = r.pairs[0].hr, h1 = r.pairs[r.pairs.length - 1].hr;
+        const drift = (h1 - h0) / h0 * 100;
+        if (drift >= 8) warns.push(`心率漂移约 ${Math.round(drift)}%（${h0}→${h1}）偏高——能量账或热账在漏：回看途中补糖补水和气温`);
+        else if (drift >= 3) bullets.push(`心率漂移 ${Math.round(drift)}%（${h0}→${h1}）：正常范围`);
+        else bullets.push(`心率漂移 ${Math.round(drift)}%（${h0}→${h1}）：很稳，有氧底子在线`);
+      }
+
+      // 一致性校验：距离÷时长 与识别配速是否打架
+      if (r.distance && r.duration && r.pace) {
+        const implied = r.duration / r.distance * 60;
+        const err = Math.abs(implied - r.pace * 60) / (r.pace * 60);
+        if (err > 0.03) warns.push(`数据打架：距离÷时长=${secToPace(implied)}，与识别配速 ${r.paceStr} 差 ${(err * 100).toFixed(0)}%——以你手表为准手动确认`);
+      }
+
+      // 强度区间
+      if (r.zones && r.zones.length) {
+        const top = r.zones.reduce((x, y) => (y.pct > x.pct ? y : x));
+        if (top.pct >= 50) bullets.push(`强度分布：${top.pct}% 落在${top.name}——主体是${/恢复|耐力/.test(top.name) ? '一堂扎实有氧课' : '一堂强度课'}`);
+      }
+
+      // 天气提示
+      if (r.weather === '高温') bullets.push('高温天气：心率偏高、汗量大属正常，热账优先管理（补水、降温）');
+
+      return { summary, bullets, warns };
+    }
+
+    function renderInsight(r) {
+      const box = document.getElementById('insightBox');
+      if (!box) return;
+      const ins = buildInsight(r);
+      if (!ins.summary && !ins.bullets.length && !ins.warns.length) { box.style.display = 'none'; return; }
+      box.style.display = 'block';
+      box.innerHTML = (ins.summary ? `<div style="font-weight:700;font-size:13.5px;line-height:1.7">🧠 ${ins.summary}</div>` : '')
+        + ins.bullets.map(b => `<div style="font-size:12.5px;color:var(--text-secondary);margin-top:4px">· ${b}</div>`).join('')
+        + ins.warns.map(w => `<div style="font-size:12.5px;color:var(--warning);margin-top:4px">⚠️ ${w}</div>`).join('')
+        + `<div style="font-size:11px;color:var(--surface-lighter);margin-top:8px">以上是系统对图片的理解——和你实际跑的对不上时，八成是图传错了，重传或改用文字。</div>`;
+    }
+
     // 识别结果面板：从隐藏字段读值实时渲染
     function renderAutoSummary() {
       const el = document.getElementById('autoResultChips');
@@ -3494,6 +3579,8 @@
         const key = x.replace(/\d.*/, '');
         if (!seen.has(key)) { seen.add(key); m.extras.push(x); }
       });
+      m.pairs = (a.pairs && a.pairs.length) ? a.pairs : b.pairs;
+      m.zones = (a.zones && a.zones.length) ? a.zones : b.zones;
       m.narrative = buildNarrative(m);
       return m;
     }
@@ -3515,6 +3602,7 @@
       }
       renderTypeTip.call(document.getElementById('trainingType'));
       renderAutoSummary();
+      renderInsight(r);
       document.getElementById('section-training').classList.add('expanded');
       if (filled.length) showToast(`已生成记录草稿：${filled.join('、')}，补充主观项后保存`, 'success');
       else showToast('没识别出有效数据，换个写法试试', 'error');
