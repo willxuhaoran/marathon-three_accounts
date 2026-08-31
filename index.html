@@ -1481,39 +1481,9 @@
     /* 计划卡详情多行展示 + 日期输入暗色 */
     .plan-details { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.55; }
     #recordDate { color-scheme: dark; }
-    /* ===== 登录门禁 ===== */
-    .login-gate { position: fixed; inset: 0; z-index: 9999; background: radial-gradient(900px 500px at 80% -10%, rgba(0,210,106,.15), transparent 60%), var(--bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .login-gate.hidden { display: none; }
-    .login-card { width: 100%; max-width: 340px; text-align: center; animation: loginUp .5s ease both; }
-    .login-logo { width: 88px; height: 88px; margin: 0 auto; border-radius: 22px; background: var(--surface); border: 1px solid var(--surface-lighter); color: var(--primary); font-size: 52px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-    .login-card h1 { margin-top: 16px; font-size: 30px; font-weight: 800; }
-    .login-slogan { color: var(--text-secondary); font-size: 13px; margin-top: 6px; letter-spacing: .05em; }
-    #loginForm { margin-top: 26px; }
-    #loginCode { text-align: center; font-size: 16px; letter-spacing: .1em; }
-    .login-btn { width: 100%; margin-top: 14px; background: var(--primary); color: #0F172A; font-weight: 800; font-size: 16px; border: none; border-radius: 10px; padding: 13px; cursor: pointer; }
-    .login-error { color: var(--danger); font-size: 12.5px; min-height: 18px; margin-top: 8px; }
-    .login-hint { color: var(--surface-lighter); font-size: 11.5px; margin-top: 22px; }
-    .login-shake { animation: shake .4s; }
-    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
-    @keyframes loginUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-    .logout-btn { background: none; border: 1px solid var(--surface-lighter); color: var(--text-secondary); border-radius: 999px; padding: 3px 10px; font-size: 11px; cursor: pointer; margin-right: 10px; }
   </style>
 </head>
 <body>
-    <!-- 登录门禁 -->
-    <div class="login-gate" id="loginGate">
-      <div class="login-card">
-        <div class="login-logo">账</div>
-        <h1>三本账</h1>
-        <p class="login-slogan">后半程不撞墙 · min(⚡ 🌡️ 🦵)</p>
-        <form id="loginForm">
-          <input type="password" id="loginCode" class="form-input" placeholder="输入团队口令" autocomplete="current-password">
-          <div class="login-error" id="loginError"></div>
-          <button type="submit" class="login-btn">进入</button>
-        </form>
-        <p class="login-hint">仅限黑马队友使用 · 口令找太浪索取</p>
-      </div>
-    </div>
 
   <div class="app">
     <!-- Header -->
@@ -1525,7 +1495,6 @@
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
       </div>
-      <button class="logout-btn" onclick="logout()">退出</button>
       <span class="header-date" id="currentDate"></span>
     </header>
 
@@ -2377,7 +2346,6 @@
       renderAnalysis();
       loadWeekPlan();
       initCoach();
-      initLoginGate();
     });
 
     // Date Functions
@@ -3868,31 +3836,6 @@
       } else { fallback(); }
     }
 
-    /* ================= 登录门禁（团队口令） ================= */
-    const LOGIN_PASSCODE = '黑马2026';   // 改口令就改这一行
-    function initLoginGate() {
-      const gate = document.getElementById('loginGate');
-      if (localStorage.getItem('sbz_auth') === '1') { gate.classList.add('hidden'); return; }
-      document.getElementById('loginForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const v = document.getElementById('loginCode').value.trim();
-        if (v === LOGIN_PASSCODE) {
-          localStorage.setItem('sbz_auth', '1');
-          gate.classList.add('hidden');
-          showToast('登录成功，开练！', 'success');
-        } else {
-          document.getElementById('loginError').textContent = '口令不对，再试一次';
-          const card = gate.querySelector('.login-card');
-          card.classList.remove('login-shake'); void card.offsetWidth; card.classList.add('login-shake');
-        }
-      });
-    }
-    function logout() {
-      if (confirm('退出登录？（本机的训练记录不会删除）')) {
-        localStorage.removeItem('sbz_auth');
-        location.reload();
-      }
-    }
     // PWA：注册 Service Worker（仅 https 环境）
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
       window.addEventListener('load', () => {
