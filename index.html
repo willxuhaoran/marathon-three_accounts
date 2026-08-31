@@ -1612,10 +1612,10 @@
         <div class="card" style="padding:18px;margin-bottom:16px">
           <h3 class="section-title">📸 智能识别（手表截图 / 文字）</h3>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="dc-btn" style="background:var(--accent)" onclick="document.getElementById('watchShotInput').click()">上传手表截图</button>
+            <button class="dc-btn" style="background:var(--accent)" onclick="document.getElementById('watchShotInput').click()">上传手表截图（可多选）</button>
             <button class="dc-btn" onclick="parseAndFill(document.getElementById('smartText').value)">识别文字填入</button>
           </div>
-          <input type="file" id="watchShotInput" accept="image/*" style="display:none" onchange="handleWatchScreenshot(this)">
+          <input type="file" id="watchShotInput" accept="image/*" multiple style="display:none" onchange="handleWatchScreenshot(this)">
           <textarea class="form-input" id="smartText" rows="3" style="margin-top:10px" placeholder="点「上传手表截图」自动识别佳明/高驰数据；或在此粘贴输入文字，如：轻松跑 14.28km 用时1:16:14 配速5'20 心率138 —— 识别后自动填入下方表单，核对无误再保存"></textarea>
           <div id="ocrProgress" style="margin-top:8px;font-size:12.5px;color:var(--text-secondary)"></div>
         </div>
@@ -1640,6 +1640,14 @@
               <div class="form-group" style="display:flex;align-items:flex-end">
                 <button type="button" id="backTodayBtn" class="dc-btn" style="background:var(--surface-light);color:var(--text);display:none" onclick="setRecordDate(getDateStr())">回到今天</button>
               </div>
+            </div>
+            <div id="dayPlanCard" style="display:none;margin:-6px 0 14px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.35);border-radius:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="cb-tag" id="dayPlanType" style="background:var(--accent)">训练</span>
+                <b style="font-size:13.5px">当日课表 · 注意事项</b>
+              </div>
+              <div id="dayPlanText" style="font-size:12.5px;line-height:1.7;margin-top:6px"></div>
+              <div id="dayPlanTip" style="color:var(--text-secondary);font-size:12px;margin-top:6px;line-height:1.6"></div>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -3414,7 +3422,23 @@
     }
 
     function parseAndFill(text) {
-      const r = parseSmartText(text || '');
+      parseAndFillResult(parseSmartText(text || ''));
+    }
+
+    // 多图合并：核心字段先见先得，扩展数据按类去重
+    function mergeParsed(a, b) {
+      const m = { extras: [] };
+      ['date', 'distance', 'duration', 'pace', 'paceStr', 'fastest', 'hr', 'hrMax', 'type', 'progress']
+        .forEach(k => { m[k] = (a[k] !== undefined && a[k] !== '') ? a[k] : b[k]; });
+      const seen = new Set();
+      [...a.extras, ...b.extras].forEach(x => {
+        const key = x.replace(/\d.*/, '');
+        if (!seen.has(key)) { seen.add(key); m.extras.push(x); }
+      });
+      return m;
+    }
+
+    function parseAndFillResult(r) {
       const filled = [];
       if (r.date) { setRecordDate(r.date); filled.push('日期'); }
       if (r.type) { document.getElementById('trainingType').value = r.type; filled.push('类型'); }
@@ -3425,7 +3449,7 @@
       const bits = [];
       if (r.paceStr) bits.push(`均配${r.paceStr}` + (r.fastest ? `(最快${r.fastest})` : ''));
       if (r.hr) bits.push(`均心率${r.hr}` + (r.hrMax ? `(最大${r.hrMax})` : ''));
-      bits.push(...r.extras);
+      bits.push(...new Set(r.extras));
       if (r.progress) bits.push(r.progress);
       if (bits.length) {
         const notesEl = document.getElementById('trainingNotes');
@@ -3440,44 +3464,53 @@
     }
 
     async function handleWatchScreenshot(input) {
-      const file = input.files && input.files[0];
+      const files = Array.from(input.files || []);
       input.value = '';
-      if (!file) return;
+      if (!files.length) return;
       if (typeof Tesseract === 'undefined') { showToast('OCR 组件未加载，请检查网络后重试', 'error'); return; }
       const prog = document.getElementById('ocrProgress');
+      const texts = [];
+      let merged = null;
       try {
-        prog.textContent = '正在加载识别引擎…';
-        const bmp = await createImageBitmap(file);
-        const scale = Math.min(3, Math.max(1.5, 2400 / bmp.width));
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(bmp.width * scale);
-        cv.height = Math.round(bmp.height * scale);
-        const ctx = cv.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
-        // 预处理：灰度 + 暗图反色 + 对比度拉伸（深色手表卡片 → 黑字白底）
-        const imgData = ctx.getImageData(0, 0, cv.width, cv.height);
-        const px = imgData.data;
-        let sum = 0, cnt = 0;
-        for (let i = 0; i < px.length; i += 40) { sum += (px[i] + px[i + 1] + px[i + 2]) / 3; cnt++; }
-        const invert = (sum / cnt) < 110;
-        for (let i = 0; i < px.length; i += 4) {
-          let g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-          if (invert) g = 255 - g;
-          g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
-          px[i] = px[i + 1] = px[i + 2] = g;
-        }
-        ctx.putImageData(imgData, 0, 0);
-        const res = await Tesseract.recognize(cv, 'chi_sim+eng', {
-          logger: m => {
-            if (m.status === 'recognizing text') prog.textContent = `正在识别截图… ${Math.round(m.progress * 100)}%`;
+        for (let i = 0; i < files.length; i++) {
+          prog.textContent = `正在识别第 ${i + 1}/${files.length} 张…`;
+          const bmp = await createImageBitmap(files[i]);
+          const scale = Math.min(3, Math.max(1.5, 2400 / bmp.width));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(bmp.width * scale);
+          cv.height = Math.round(bmp.height * scale);
+          const ctx = cv.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+          // 预处理：灰度 + 暗图反色 + 对比度拉伸（深色手表卡片 → 黑字白底）
+          const imgData = ctx.getImageData(0, 0, cv.width, cv.height);
+          const px = imgData.data;
+          let sum = 0, cnt = 0;
+          for (let j = 0; j < px.length; j += 40) { sum += (px[j] + px[j + 1] + px[j + 2]) / 3; cnt++; }
+          const invert = (sum / cnt) < 110;
+          for (let j = 0; j < px.length; j += 4) {
+            let g = 0.299 * px[j] + 0.587 * px[j + 1] + 0.114 * px[j + 2];
+            if (invert) g = 255 - g;
+            g = Math.max(0, Math.min(255, (g - 128) * 1.6 + 128));
+            px[j] = px[j + 1] = px[j + 2] = g;
           }
-        });
-        const text = (res && res.data && res.data.text) || '';
+          ctx.putImageData(imgData, 0, 0);
+          const res = await Tesseract.recognize(cv, 'chi_sim+eng', {
+            logger: m => {
+              if (m.status === 'recognizing text') prog.textContent = `第 ${i + 1}/${files.length} 张 · ${Math.round(m.progress * 100)}%`;
+            }
+          });
+          const text = (res && res.data && res.data.text) || '';
+          if (text.trim()) {
+            texts.push(text);
+            const r = parseSmartText(text);
+            merged = merged ? mergeParsed(merged, r) : r;
+          }
+        }
         prog.textContent = '';
-        if (!text.trim()) { showToast('没读出文字，换张更清晰的截图', 'error'); return; }
-        document.getElementById('smartText').value = text;
-        parseAndFill(text);
+        if (!texts.length) { showToast('没读出文字，换张更清晰的截图', 'error'); return; }
+        document.getElementById('smartText').value = texts.join('\n---\n');
+        parseAndFillResult(merged);
       } catch (e) {
         console.error(e);
         prog.textContent = '';
@@ -3502,6 +3535,60 @@
       document.getElementById('backTodayBtn').style.display = isToday ? 'none' : 'inline-block';
       loadTodayData(d);
       fillTrainingForm(d);
+      renderDayPlan(d);
+    }
+
+    // 取某天的课表（原文优先）
+    function getPlanForDate(date) {
+      const plan = loadFromStorage('plan');
+      if (!plan || !plan.days) return null;
+      const idx = getWeekDates(0).indexOf(date);
+      if (idx < 0) return null;
+      const raw = (plan.daysRaw && plan.daysRaw[idx]) || plan.days[idx] || '';
+      if (!raw) return null;
+      return { raw, type: guessPlanType(raw) };
+    }
+
+    // 从课表原文解析目标距离/时长
+    function parsePlanTargets(raw) {
+      const out = {};
+      if (!raw) return out;
+      const range = raw.match(/(\d+(?:\.\d+)?)\s*[-~]\s*(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
+      if (range) out.distance = Math.round((parseFloat(range[1]) + parseFloat(range[2])) / 2 * 10) / 10;
+      else {
+        const single = raw.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
+        if (single) out.distance = parseFloat(single[1]);
+      }
+      const mins = raw.match(/(\d{2,3})\s*分钟/);
+      if (mins) out.duration = parseInt(mins[1]);
+      return out;
+    }
+
+    // 记录页顶部：当日课表 + 注意事项 + 按课表预填
+    function renderDayPlan(date) {
+      const card = document.getElementById('dayPlanCard');
+      const p = getPlanForDate(date);
+      if (!p) { card.style.display = 'none'; return; }
+      card.style.display = 'block';
+      document.getElementById('dayPlanText').textContent = p.raw;
+      document.getElementById('dayPlanType').textContent = p.type || '训练';
+      const tip = (p.type && COACH_TYPE_TIPS[p.type]) || '';
+      const tipEl = document.getElementById('dayPlanTip');
+      tipEl.textContent = tip;
+      tipEl.style.display = tip ? 'block' : 'none';
+      // 当天尚无记录：按课表预填类型/距离/时长，记录 = 对照计划写执行
+      const hasRecord = loadFromStorage('training').some(x => x.date === date);
+      if (!hasRecord) {
+        const targets = parsePlanTargets(p.raw);
+        if (p.type && !document.getElementById('trainingType').value) {
+          document.getElementById('trainingType').value = p.type;
+          renderTypeTip.call(document.getElementById('trainingType'));
+        }
+        if (targets.distance && !document.getElementById('trainingDistance').value)
+          document.getElementById('trainingDistance').value = targets.distance;
+        if (targets.duration && !document.getElementById('trainingDuration').value)
+          document.getElementById('trainingDuration').value = targets.duration;
+      }
     }
 
     function fillTrainingForm(date) {
@@ -3541,17 +3628,9 @@
     }
 
     function focusDay(date) {
-      // 跳到记录页，按该天日期录入（支持补记）
+      // 跳到记录页，按该天日期录入（课表预填由 renderDayPlan 统一处理）
       document.querySelector('[data-tab="today"]').click();
       setRecordDate(date);
-      // 若当天还没记录，按计划文本预填训练类型
-      const plan = loadFromStorage('plan');
-      const idx = getWeekDates(0).indexOf(date);
-      const typeEl = document.getElementById('trainingType');
-      if (plan && plan.days && idx >= 0 && !typeEl.value) {
-        const g = guessPlanType((plan.daysRaw && plan.daysRaw[idx]) || plan.days[idx] || '');
-        if (g) { typeEl.value = g; renderTypeTip.call(typeEl); }
-      }
       document.getElementById('section-training').classList.add('expanded');
       const isToday = date === getDateStr();
       showToast(isToday ? '记录今天的训练吧' : `补记 ${date.slice(5).replace('-', '月')}日 的训练`, 'success');
