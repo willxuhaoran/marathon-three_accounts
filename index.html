@@ -1497,7 +1497,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.9.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.9.2</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1625,6 +1625,9 @@
           </div>
           <input type="file" id="watchShotInput" accept="image/*" multiple style="display:none" onchange="handleWatchScreenshot(this)">
           <textarea class="form-input" id="smartText" rows="3" style="margin-top:10px" placeholder="点「上传手表截图」自动识别佳明/高驰数据；或在此粘贴输入文字，如：轻松跑 14.28km 用时1:16:14 配速5'20 心率138 —— 识别后自动填入下方表单，核对无误再保存"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px">
+            <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="copyOcrText()">📋 复制识别原文（纠错用）</button>
+          </div>
           <div id="ocrProgress" style="margin-top:8px;font-size:12.5px;color:var(--text-secondary)"></div>
           <div id="insightBox" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:10px"></div>
         </div>
@@ -3300,7 +3303,7 @@
         if (dm) r.date = `${new Date().getFullYear()}-${String(dm[1]).padStart(2, '0')}-${String(dm[2]).padStart(2, '0')}`;
       }
 
-      // 距离：标签邻近值优先；裸 km 最大值须超过标签值 2.2 倍才可信（防地图/图表幽灵值，保分组选择器正例）
+      // 距离：标签邻近值优先；裸 km 值只信"干净行"（整行仅数字/单位，杜绝"下降21"这类幽灵值）
       const labeled = [];
       const pushL = v => { if (v >= 3) labeled.push(v); };
       const dRx1 = /(\d+(?:\.\d+)?)\s*(?:公里|千米|km)?[^0-9]{0,6}距离/gi;
@@ -3308,12 +3311,23 @@
       let dm2;
       while ((dm2 = dRx1.exec(t)) !== null) pushL(parseFloat(dm2[1]));
       while ((dm2 = dRx2.exec(t)) !== null) pushL(parseFloat(dm2[1]));
-      const kmAll = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km(?!\/h)|k\b)/gi)].map(m => parseFloat(m[1]));
+      const linesArr = t.split('\n');
+      const cleanLine = l => /^[\d\s.,:kKmM公里千米'"\/()°-]{1,24}$/.test(l.trim());
+      const kmAll = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:公里|千米|km(?!\/h)|k\b)/gi)]
+        .map(m => ({ v: parseFloat(m[1]), line: linesArr.find(l => l.includes(m[0])) || '' }))
+        .filter(x => x.v >= 3 && cleanLine(x.line))
+        .map(x => x.v);
       const labMax = labeled.length ? Math.max(...labeled) : 0;
       const kmMax = kmAll.length ? Math.max(...kmAll) : 0;
       if (labMax && kmMax > labMax * 2.2) r.distance = kmMax;
       else if (labMax) r.distance = labMax;
       else if (kmMax) r.distance = kmMax;
+      if (!r.distance) {
+        // 兜底：独立行的大号小数（距离大字单位丢失时）
+        const big = linesArr.map(l => l.trim().match(/^(\d{1,2}\.\d{1,2})\.?$/))
+          .filter(Boolean).map(m => parseFloat(m[1])).filter(v => v >= 3 && v < 60);
+        if (big.length) r.distance = Math.max(...big);
+      }
 
       // 时长：标签优先（两段式排除配速写法）；裸 h:mm:ss 取最后一个（总计 > 累计分段）
       let durL = grabLabeled(t, ['运动时间', '移动时间', '用时', '耗时', '时长'], '\\d{1,2}:\\d{2}:\\d{2}');
@@ -3388,11 +3402,14 @@
       if (cad) r.extras.push(`步频${cad[1]}`);
       const stride = t.match(/步幅(?!比)[^0-9]{0,15}(?:平均[^0-9]{0,4})?(\d{2,3})/);
       if (stride) r.extras.push(`步幅${stride[1]}`);
-      const asc = t.match(/(\d{1,4})\s*m?[^0-9]{0,4}(?:累计上升|累计爬升|爬升)/)
-        || t.match(/(?:累计上升|累计爬升|爬升)[^0-9]{0,4}(\d{1,4})(?!\d)(?!\s*kcal)/i)
+      const asc = t.match(/(\d{1,4})\s*m?[^0-9]{0,4}(?:累计上升|累计爬升|爬升|Bit LF|Alb Ett)/)
+        || t.match(/(?:累计上升|累计爬升|爬升|Bit LF|Alb Ett)[^0-9]{0,4}(\d{1,4})(?!\d)(?!\s*kcal)/i)
         || t.match(/(\d{1,4})\s*m[^0-9]{0,4}上升/)
         || t.match(/上升[^0-9]{0,4}(\d{1,4})(?!\d)(?!\s*kcal)/i);
       if (asc) r.extras.push(`上升${asc[1]}m`);
+      const desc = t.match(/(\d{1,4})\s*m?[^0-9]{0,4}下降/)
+        || t.match(/下降[^0-9]{0,4}(\d{1,4})(?!\d)/);
+      if (desc) r.extras.push(`下降${desc[1]}m`);
       let kcal = t.match(/(\d{3,5})\s*kcal/i);
       if (!kcal) { const g = grabLabeled(t, ['卡路里', '热量'], '\\d{3,5}'); if (g) kcal = [null, g]; }
       if (kcal) r.extras.push(`${kcal[1]}kcal`);
@@ -4016,6 +4033,21 @@
       XLSX.utils.book_append_sheet(wb, ws, '周报');
       XLSX.writeFile(wb, `三本账周报-${dates[0]}.xlsx`);
       showToast('已导出 xlsx', 'success');
+    }
+
+    function copyOcrText() {
+      const t = document.getElementById('smartText').value || '';
+      if (!t.trim()) { showToast('还没有识别原文', 'error'); return; }
+      const done = () => showToast('已复制，发给我诊断', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(done).catch(() => {
+          document.getElementById('smartText').select();
+          document.execCommand('copy'); done();
+        });
+      } else {
+        document.getElementById('smartText').select();
+        document.execCommand('copy'); done();
+      }
     }
 
     function copyWeeklyText() {
