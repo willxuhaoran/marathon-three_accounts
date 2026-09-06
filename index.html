@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.12.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.12.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1814,6 +1814,19 @@
                   <option value="偏低">偏低</option>
                   <option value="低">低</option>
                 </select>
+              </div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">恢复与康复措施（可多选）</label>
+              <div id="recoveryMeasures" style="display:flex;flex-wrap:wrap;gap:8px">
+                <span class="ip-chip" data-m="理疗" onclick="this.classList.toggle('active')">理疗</span>
+                <span class="ip-chip" data-m="按摩" onclick="this.classList.toggle('active')">按摩</span>
+                <span class="ip-chip" data-m="瑜伽" onclick="this.classList.toggle('active')">瑜伽</span>
+                <span class="ip-chip" data-m="拉伸" onclick="this.classList.toggle('active')">拉伸</span>
+                <span class="ip-chip" data-m="泡沫轴" onclick="this.classList.toggle('active')">泡沫轴</span>
+                <span class="ip-chip" data-m="冰敷" onclick="this.classList.toggle('active')">冰敷</span>
+                <span class="ip-chip" data-m="热敷" onclick="this.classList.toggle('active')">热敷</span>
+                <span class="ip-chip" data-m="冥想" onclick="this.classList.toggle('active')">冥想</span>
               </div>
             </div>
           </div>
@@ -2533,6 +2546,7 @@
       const restingHR = parseInt(document.getElementById('restingHR').value) || 0;
       const hrv = parseFloat(document.getElementById('hrvValue').value) || null;
       const hrvLevel = document.getElementById('hrvLevel').value || null;
+      const measures = [...document.querySelectorAll('#recoveryMeasures .ip-chip.active')].map(el => el.dataset.m);
 
       if (fatigue || sleepQuality || sleepHours) {
         const recovery = {
@@ -2543,7 +2557,8 @@
           sleepHours: sleepHours,
           restingHR: restingHR,
           hrv: hrv,
-          hrvLevel: hrvLevel
+          hrvLevel: hrvLevel,
+          measures: measures.length ? measures : null
         };
 
         let recoveries = loadFromStorage('recovery');
@@ -2629,6 +2644,7 @@
       showToast(`已保存 ${today.slice(5).replace('-', '月')}日 的记录`, 'success');
       loadTodayData(today);
       loadWeekPlan();
+      renderDayPlan(today);
       coachAfterSave(trainingType, savedDistance, savedDuration, today);
       clearForms();
     }
@@ -2660,6 +2676,7 @@
       document.getElementById('bodyWeight').value = '';
       document.getElementById('hrvValue').value = '';
       document.getElementById('hrvLevel').value = '';
+      document.querySelectorAll('#recoveryMeasures .ip-chip').forEach(c => c.classList.remove('active'));
     }
 
     // Load Today Data
@@ -2858,7 +2875,7 @@
                 <div>
                   <div class="history-title">伤病记录 - ${record.bodyPart}</div>
                   <div class="history-stats">
-                    <span class="injury-tag ${severityClass}">严重程度: ${record.severity}/10</span>
+                    <span class="injury-tag ${severityClass}">严重程度: ${record.severity}/5</span>
                     <span class="history-stat">${record.symptom || ''}</span>
                   </div>
                 </div>
@@ -2878,8 +2895,10 @@
                 <div>
                   <div class="history-title">恢复追踪</div>
                   <div class="history-stats">
-                    <span class="history-stat">疲劳 <span>${record.fatigue || '-'}</span>/10</span>
+                    <span class="history-stat">疲劳 <span>${record.fatigue || '-'}</span>/5</span>
                     <span class="history-stat">睡眠 <span>${record.sleepHours || '-'}</span>小时</span>
+                    ${record.hrvLevel ? `<span class="history-stat">HRV <span>${record.hrvLevel}</span></span>` : (record.hrv ? `<span class="history-stat">HRV <span>${record.hrv}</span>ms</span>` : '')}
+                    ${record.measures && record.measures.length ? `<span class="history-stat">康复 <span>${record.measures.join('、')}</span></span>` : ''}
                   </div>
                 </div>
                 <div class="history-actions">
@@ -3262,7 +3281,7 @@
           plannedDistance += planDistance;
         }
 
-        if (training && training.distance > 0) {
+        if (training && (training.distance > 0 || training.duration > 0)) {
           completedCount++;
           totalDistance += training.distance;
           return `
