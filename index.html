@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.10.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.11.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1802,6 +1802,17 @@
               <div class="form-group">
                 <label class="form-label">HRV (ms，选填)</label>
                 <input type="number" class="form-input" id="hrvValue" placeholder="如 68" min="5" max="300">
+              </div>
+              <div class="form-group">
+                <label class="form-label">HRV 状态</label>
+                <select class="form-input" id="hrvLevel">
+                  <option value="">选填</option>
+                  <option value="平衡">平衡</option>
+                  <option value="正常">正常</option>
+                  <option value="偏高">偏高</option>
+                  <option value="偏低">偏低</option>
+                  <option value="低">低</option>
+                </select>
               </div>
             </div>
           </div>
@@ -2520,6 +2531,7 @@
       const sleepHours = parseFloat(document.getElementById('sleepHours').value) || 0;
       const restingHR = parseInt(document.getElementById('restingHR').value) || 0;
       const hrv = parseFloat(document.getElementById('hrvValue').value) || null;
+      const hrvLevel = document.getElementById('hrvLevel').value || null;
 
       if (fatigue || sleepQuality || sleepHours) {
         const recovery = {
@@ -2529,7 +2541,8 @@
           sleepQuality: sleepQuality,
           sleepHours: sleepHours,
           restingHR: restingHR,
-          hrv: hrv
+          hrv: hrv,
+          hrvLevel: hrvLevel
         };
 
         let recoveries = loadFromStorage('recovery');
@@ -2645,6 +2658,7 @@
       document.getElementById('dietNotes').value = '';
       document.getElementById('bodyWeight').value = '';
       document.getElementById('hrvValue').value = '';
+      document.getElementById('hrvLevel').value = '';
     }
 
     // Load Today Data
@@ -3199,14 +3213,14 @@
             planDetails = `${planDistance}km`;
           } else {
             // PDF 原文：完整展示计划内容
-            planType = guessPlanType(dayPlan) || '训练';
+            planType = guessPlanTypes(dayPlan).join('＋') || '训练';
             planDetails = dayPlan;
             const km = dayPlan.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
             planDistance = km ? parseFloat(km[1]) : 0;
           }
           if (rawPlan) {
             // 有 PDF 原文：优先完整展示（类型徽章按原文识别）
-            planType = guessPlanType(rawPlan) || planType;
+            planType = guessPlanTypes(rawPlan).join('＋') || planType;
             planDetails = rawPlan;
             const kmr = rawPlan.match(/(\d+(?:\.\d+)?)\s*[-~]\s*(\d+)\s*[kK㎞公里]/) || rawPlan.match(/(\d+(?:\.\d+)?)\s*[kK㎞公里]/);
             if (kmr) planDistance = kmr[2] ? Math.round((parseFloat(kmr[1]) + parseFloat(kmr[2])) / 2) : parseFloat(kmr[1]);
@@ -3615,9 +3629,11 @@
       }
       if (g('trainingHr')) chips.push(['均心率', g('trainingHr') + ' bpm', 'trainingHr', 'num']);
       if (g('trainingWeather')) chips.push(['天气', g('trainingWeather'), 'trainingWeather', 'cycle']);
+      const extraV = document.getElementById('trainingExtra').value.trim();
       el.innerHTML = chips.length
         ? chips.map(([k, v, f, kind], i) =>
             (i === 2 ? paceChip : '') + `<span class="chip2" style="cursor:pointer" title="点我修改" onclick="editChip('${f}','${kind}')">${k} <b>${v}</b></span>`).join('')
+          + (extraV ? `<span class="chip2" style="border-color:rgba(255,107,53,.5)">＋ <b>${extraV.length > 18 ? extraV.slice(0, 18) + '…' : extraV}</b></span>` : '')
         : '<span style="color:var(--text-secondary);font-size:12.5px">等待识别——上传手表截图或粘贴文字，自动生成训练数据</span>';
     }
 
@@ -3649,6 +3665,11 @@
       if (r.duration) { document.getElementById('trainingDuration').value = r.duration; filled.push('时长'); }
       if (r.hr) { document.getElementById('trainingHr').value = r.hr; filled.push('心率'); }
       if (r.weather) { document.getElementById('trainingWeather').value = r.weather; filled.push('天气'); }
+      // 双课日：第二课（力量/交叉）自动计入额外训练
+      if (r.extraAuto) {
+        const ex = document.getElementById('trainingExtra');
+        if (!ex.value.trim()) { ex.value = r.extraAuto; filled.push('额外训练'); }
+      }
       // 智能化总结 → 备注（仅当备注为空），并在识别区展示
       if (r.narrative) {
         const notesEl = document.getElementById('trainingNotes');
@@ -3671,7 +3692,7 @@
       if (typeof Tesseract === 'undefined') { showToast('OCR 组件未加载，请检查网络后重试', 'error'); return; }
       const prog = document.getElementById('ocrProgress');
       const texts = [];
-      let merged = null;
+      let runR = null, otherR = null; // 跑步类与力量/交叉类分开识别合并
       let worker = null;
       let progressLabel = '';
       try {
@@ -3739,7 +3760,10 @@
           if (text.trim()) {
             texts.push(text);
             const r = parseSmartText(text);
-            merged = merged ? mergeParsed(merged, r) : r;
+            // 按运动类别分流：有距离/配速 → 跑步；无距离但有时长心率或力量关键词 → 力量/交叉
+            const isRun = !!r.distance || !!r.pace || ['长跑', 'E跑', '间歇跑', '节奏跑'].includes(r.type);
+            if (isRun) runR = runR ? mergeParsed(runR, r) : r;
+            else otherR = otherR ? mergeParsed(otherR, r) : r;
           }
         } catch (e) {
           console.error('第' + (i + 1) + '张识别失败', e); // 单张失败不影响其他
@@ -3749,6 +3773,12 @@
       prog.textContent = '';
       if (!texts.length) { showToast('没读出文字，换张更清晰的截图', 'error'); return; }
       document.getElementById('smartText').value = texts.join('\n---\n');
+      let merged = runR || otherR;
+      if (runR && otherR) {
+        // 双课日：主课跑步 + 力量/交叉自动计入"额外训练"
+        merged.extraAuto = (otherR.type || '力量训练') + '：' + (buildNarrative(otherR) || '已完成');
+        merged.extraType = otherR.type || '力量训练';
+      }
       parseAndFillResult(merged);
     }
 
@@ -3780,7 +3810,7 @@
       if (idx < 0) return null;
       const raw = (plan.daysRaw && plan.daysRaw[idx]) || plan.days[idx] || '';
       if (!raw) return null;
-      return { raw, type: guessPlanType(raw) };
+      return { raw, type: guessPlanType(raw), types: guessPlanTypes(raw) };
     }
 
     // 从课表原文解析目标距离/时长
@@ -3834,7 +3864,8 @@
           const isRunItem = /跑|配速|\d+\s*[kK㎞]/i.test(it);
           const isStrItem = /力量|核心|技术|hyrox/i.test(it);
           if ((['长跑', 'E跑', '间歇跑', '节奏跑'].includes(rec.type) && isRunItem) ||
-              (rec.type === '力量训练' && isStrItem)) { doneMap[i] = true; changed = true; }
+              (rec.type === '力量训练' && isStrItem) ||
+              (/力量|核心|hyrox/i.test(rec.extra || '') && isStrItem)) { doneMap[i] = true; changed = true; }
         });
         if (changed) { all[date] = doneMap; localStorage.setItem('marathon_plan_done', JSON.stringify(all)); }
       }
@@ -3845,7 +3876,7 @@
               <span style="${doneMap[i] ? 'text-decoration:line-through;color:var(--text-secondary)' : ''}">${it}</span>
             </label>`).join('')
         : p.raw;
-      document.getElementById('dayPlanType').textContent = p.type || '训练';
+      document.getElementById('dayPlanType').textContent = (p.types && p.types.length ? p.types.join('＋') : '') || '训练';
       const tip = (p.type && COACH_TYPE_TIPS[p.type]) || '';
       const tipEl = document.getElementById('dayPlanTip');
       tipEl.textContent = tip;
@@ -3890,18 +3921,28 @@
       renderAutoSummary();
     }
 
-    // 从计划文本猜测训练类型（用于预填）
+    // 从计划文本识别全部类型（按出现顺序，双课日返回多个）
+    function guessPlanTypes(text) {
+      if (!text) return [];
+      const rules = [
+        [/间歇|重复|变速/, '间歇跑'],
+        [/节奏|tempo/i, '节奏跑'],
+        [/力量|核心|技术练习|hyrox|体能训练/i, '力量训练'],
+        [/骑行|游泳|划船|椭圆|单车|桨板/i, '交叉训练'],
+        [/长跑|长距离|lsd|稳定配速|耐力跑|耐力训练/i, '长跑'],
+        [/恢复跑|恢复训练|恢复日|放松|慢跑|轻松|E跑/i, 'E跑'],
+      ];
+      const found = rules.filter(([rx]) => rx.test(text)).map(([rx, tp]) => ({ tp, idx: text.search(rx) }));
+      found.sort((a, b) => a.idx - b.idx);
+      const types = [...new Set(found.map(f => f.tp))];
+      // 「休息」放最后且从严：防止"组间休息90秒"误判为休息日；先剥掉"全部/团队"前缀
+      const stripped = text.replace(/^(?:全部|团队|组别|[-–—]|\s)+/g, '').trim();
+      if (!types.length && (/^休息/.test(stripped) || stripped === '休息')) return ['休息日'];
+      return types;
+    }
+    // 从计划文本猜测训练类型（用于预填，取第一个）
     function guessPlanType(text) {
-      if (!text) return '';
-      if (/间歇|重复|变速/.test(text)) return '间歇跑';
-      if (/节奏|tempo/i.test(text)) return '节奏跑';
-      if (/力量|核心|技术练习|hyrox|体能训练/i.test(text)) return '力量训练';
-      if (/骑行|游泳|划船|椭圆|单车|桨板/i.test(text)) return '交叉训练';
-      if (/长跑|长距离|lsd|稳定配速|耐力跑|耐力训练/i.test(text)) return '长跑';
-      if (/恢复跑|恢复训练|恢复日|放松|慢跑|轻松|E跑/i.test(text)) return 'E跑';
-      // 「休息」必须放最后且从严：防止"组间休息90秒"误判为休息日
-      if (/^\s*休息/.test(text) || text.trim() === '休息') return '休息日';
-      return '';
+      return guessPlanTypes(text)[0] || '';
     }
 
     function focusDay(date) {
