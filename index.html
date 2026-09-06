@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.12.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.13.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1701,8 +1701,16 @@
               </select>
             </div>
             <div class="form-group full">
-              <label class="form-label">3️⃣ 额外训练（可填写）</label>
-              <input type="text" class="form-input" id="trainingExtra" placeholder="如：核心+上肢40min、hyrox、陪跑20k；无则留空">
+              <label class="form-label">3️⃣ 力量训练（计划内/自己加练都记这里，计入本周力量总量）</label>
+              <div class="form-row">
+                <div class="form-group">
+                  <input type="number" class="form-input" id="strengthDuration" placeholder="时长(分钟)" min="0">
+                </div>
+                <div class="form-group">
+                  <input type="number" class="form-input" id="strengthHr" placeholder="均心率(选填)" min="60" max="220">
+                </div>
+              </div>
+              <input type="text" class="form-input" id="trainingExtra" placeholder="内容：下肢负重、核心、hyrox…；额外加跑的里程可直接加进上方距离" style="margin-top:8px">
             </div>
             <div class="form-group full">
               <label class="form-label">4️⃣ 备注</label>
@@ -2066,7 +2074,7 @@
             <button class="dc-btn" style="background:var(--surface-light);color:var(--text)" onclick="renderWeekly(weeklyOffset-1)">‹ 上一周</button>
             <div style="text-align:center">
               <div style="font-weight:700;font-size:16px" id="weeklyRange"></div>
-              <div style="color:var(--text-secondary);font-size:12.5px;margin-top:2px">本周跑量 <b style="color:var(--primary)" id="weeklyKm">0</b> km ｜ 平均疲劳 <span id="weeklyFatigueAvg">—</span></div>
+              <div style="color:var(--text-secondary);font-size:12.5px;margin-top:2px">本周跑量 <b style="color:var(--primary)" id="weeklyKm">0</b> km ｜ 力量 <span id="weeklyStrength">—</span> ｜ 平均疲劳 <span id="weeklyFatigueAvg">—</span></div>
             </div>
             <button class="dc-btn" style="background:var(--surface-light);color:var(--text)" onclick="renderWeekly(weeklyOffset+1)">下一周 ›</button>
           </div>
@@ -2505,6 +2513,8 @@
           hr: parseInt(document.getElementById('trainingHr').value) || null,
           completion: document.getElementById('trainingCompletion').value,
           extra: document.getElementById('trainingExtra').value.trim(),
+          strengthDuration: parseInt(document.getElementById('strengthDuration').value) || 0,
+          strengthHr: parseInt(document.getElementById('strengthHr').value) || null,
           weather: document.getElementById('trainingWeather').value,
           notes: document.getElementById('trainingNotes').value
         };
@@ -2660,6 +2670,8 @@
       document.getElementById('trainingHr').value = '';
       document.getElementById('trainingCompletion').value = '按计划完成';
       document.getElementById('trainingExtra').value = '';
+      document.getElementById('strengthDuration').value = '';
+      document.getElementById('strengthHr').value = '';
       document.querySelectorAll('#injuryParts .ip-chip').forEach(c => c.classList.remove('active'));
       document.getElementById('injuryPartOther').value = '';
       document.getElementById('injuryPartOther').style.display = 'none';
@@ -2724,6 +2736,9 @@
         if (todayTraining.completion) line += `（${todayTraining.completion}）`;
         if (todayTraining.extra) line += ` ＋${todayTraining.extra}`;
         digest.push('🏃 ' + line);
+      }
+      if (todayTraining && todayTraining.strengthDuration) {
+        digest.push(`💪 力量 ${todayTraining.strengthDuration}min` + (todayTraining.strengthHr ? ` 均心率${todayTraining.strengthHr}` : ''));
       }
       const planInfo2 = getPlanForDate(today);
       if (planInfo2) {
@@ -3728,11 +3743,14 @@
       if (main.duration) { document.getElementById('trainingDuration').value = main.duration; filled.push('时长'); }
       if (main.hr) { document.getElementById('trainingHr').value = main.hr; filled.push('心率'); }
       if (main.weather) { document.getElementById('trainingWeather').value = main.weather; filled.push('天气'); }
-      // 第二课（力量/交叉）自动计入额外训练
+      // 第二课（力量/交叉）自动填入结构化力量区块
       if (second) {
-        const exText = (second.type || '力量训练') + '：' + (buildNarrative(second) || '已完成');
+        const sd = document.getElementById('strengthDuration');
+        if (second.duration && !sd.value) sd.value = second.duration;
+        const sh = document.getElementById('strengthHr');
+        if (second.hr && !sh.value) sh.value = second.hr;
         const ex = document.getElementById('trainingExtra');
-        if (!ex.value.trim()) { ex.value = exText; filled.push('额外训练'); }
+        if (!ex.value.trim()) { ex.value = second.type || '力量训练'; filled.push('力量训练'); }
       }
       // 智能化总结 → 备注（仅当备注为空），并在识别区展示
       if (main.narrative) {
@@ -3929,7 +3947,7 @@
           const isStrItem = /力量|核心|技术|hyrox/i.test(it);
           if ((['长跑', 'E跑', '间歇跑', '节奏跑'].includes(rec.type) && isRunItem) ||
               (rec.type === '力量训练' && isStrItem) ||
-              (/力量|核心|hyrox/i.test(rec.extra || '') && isStrItem)) { doneMap[i] = true; changed = true; }
+              ((/力量|核心|hyrox/i.test(rec.extra || '') || (rec.strengthDuration || 0) > 0) && isStrItem)) { doneMap[i] = true; changed = true; }
         });
         if (changed) { all[date] = doneMap; localStorage.setItem('marathon_plan_done', JSON.stringify(all)); }
       }
@@ -3972,6 +3990,8 @@
         set('trainingHr', t.hr || '');
         set('trainingCompletion', t.completion || '按计划完成');
         set('trainingExtra', t.extra || '');
+        set('strengthDuration', t.strengthDuration || '');
+        set('strengthHr', t.strengthHr || '');
         set('trainingWeather', t.weather || '');
         set('trainingNotes', t.notes || '');
       } else {
@@ -4080,7 +4100,7 @@
       const plan = loadFromStorage('plan');
       const decoupling = JSON.parse(localStorage.getItem('marathon_decoupling_records') || '[]');
       const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-      let totalKm = 0;
+      let totalKm = 0, strengthMin = 0, strengthCnt = 0;
       const rows = dates.map((d, i) => {
         const t = trainings.find(x => x.date === d);
         if (t && t.distance) totalKm += t.distance;
@@ -4090,6 +4110,8 @@
           actual = `${t.type} ${t.distance || 0}km ${t.duration || 0}min` + (t.hr ? ` 均心率${t.hr}bpm` : '');
           if (t.completion) actual += `（${t.completion}）`;
           if (dc) actual += `\n解耦漂移 ${dc.drift}%`;
+          const sm = (t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0);
+          if (sm) { strengthMin += sm; strengthCnt++; if (t.type !== '力量训练') actual += `\n＋力量${sm}min`; }
         }
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
@@ -4100,17 +4122,18 @@
           notes: t && t.notes ? t.notes : ''
         };
       });
-      return { dates, rows, totalKm };
+      return { dates, rows, totalKm, strengthMin, strengthCnt };
     }
 
     function renderWeekly(offset = 0) {
       weeklyOffset = offset;
-      const { dates, rows, totalKm } = collectWeeklyData();
+      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
       const injuries = loadFromStorage('injury');
       const recovery = loadFromStorage('recovery');
 
       document.getElementById('weeklyRange').textContent = `${formatDate(dates[0])} - ${formatDate(dates[6])}`;
       document.getElementById('weeklyKm').textContent = totalKm.toFixed(1);
+      document.getElementById('weeklyStrength').textContent = strengthCnt ? `${strengthMin}min / ${strengthCnt}次` : '—';
 
       document.getElementById('weeklyTbody').innerHTML = rows.map(x => `
         <tr>
@@ -4162,13 +4185,14 @@
     function exportWeeklyXlsx() {
       if (typeof XLSX === 'undefined') { showToast('表格组件未加载，请检查网络后重试', 'error'); return; }
       const r = saveWeeklyReport(true);
-      const { dates, rows, totalKm } = collectWeeklyData();
+      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
       const aoa = [
         [`周训练情况反馈 (${dates[0]} - ${dates[6]})`],
         ['日期', '训练类型', '训练计划内容', '实际完成情况', '额外训练', '训练感受与分析'],
         ...rows.map(x => [x.day, x.type, x.plan, x.actual, x.extra, x.notes]),
         [`疲劳程度: ${r.fatigue} (1-5)`, `伤病指数: ${r.injury} (1-5)`],
         [`伤病与疲劳管理：${r.management || '—'}`],
+        [`力量训练合计：${strengthCnt}次 · 共${strengthMin}分钟`],
         ['本周总结', '', `本周跑量: 约${totalKm.toFixed(0)}km`, r.summary || '']
       ];
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -4201,7 +4225,7 @@
 
     function copyWeeklyText() {
       const r = saveWeeklyReport(true);
-      const { dates, rows, totalKm } = collectWeeklyData();
+      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
       const lines = [`周训练情况反馈 (${dates[0].slice(5)} - ${dates[6].slice(5)})`, ''];
       rows.forEach(x => {
         lines.push(`【${x.day}】${x.type}`);
@@ -4214,6 +4238,7 @@
       lines.push(`疲劳程度：${r.fatigue}/5 ｜ 伤病指数：${r.injury}/5`);
       if (r.management) lines.push(`伤病与疲劳管理：${r.management}`);
       lines.push(`本周跑量：约${totalKm.toFixed(0)}km`);
+      if (strengthCnt) lines.push(`力量训练：${strengthCnt}次 · 共${strengthMin}分钟`);
       if (r.summary) lines.push(`本周总结：${r.summary}`);
       const text = lines.join('\n');
       const fallback = () => {
