@@ -3801,7 +3801,7 @@
     // 课表拆分 + 完成勾选
     function splitPlanItems(raw) {
       return raw.split(/\s+-\s+|。\s*|\n+/)
-        .map(s => s.replace(/^(全部|团队|组别|训练地点[:：]?|\s)+/g, '').trim())
+        .map(s => s.replace(/^(?:全部|团队|组别|训练地点[:：]?|[-–—•·]|\s)+/g, '').trim())
         .filter(s => s.length >= 6);
     }
     function planDoneMap() {
