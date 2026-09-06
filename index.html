@@ -1484,6 +1484,9 @@
     /* 识别结果 chips */
     .chip2 { background: var(--surface-light); border: 1px solid var(--surface-lighter); border-radius: 999px; padding: 4px 12px; font-size: 12.5px; white-space: nowrap; }
     .chip2 b { color: var(--primary); font-weight: 700; }
+    /* 伤病部位多选 */
+    .ip-chip { background: var(--surface-light); border: 1px solid var(--surface-lighter); border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; color: var(--text-secondary); user-select: none; }
+    .ip-chip.active { background: rgba(239,68,68,.15); border-color: var(--danger); color: #FCA5A5; }
   </style>
 </head>
 <body>
@@ -1497,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.9.2</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.10.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1676,14 +1679,14 @@
               <input type="number" id="trainingHr">
             </div>
             <div class="form-group">
-              <label class="form-label">1️⃣ 主观感受 (RPE 1-10)</label>
+              <label class="form-label">1️⃣ 主观感受 (RPE 1-5)</label>
               <div class="range-container">
                 <div class="range-labels">
                   <span>轻松</span>
                   <span>困难</span>
                 </div>
-                <input type="range" class="range-slider" id="trainingRpe" min="1" max="10" value="5">
-                <div class="range-value" id="rpeValue">5</div>
+                <input type="range" class="range-slider" id="trainingRpe" min="1" max="5" value="3">
+                <div class="range-value" id="rpeValue">3</div>
               </div>
             </div>
             <div class="form-group">
@@ -1719,26 +1722,26 @@
           </div>
           <div class="form-section-content">
             <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">伤病部位</label>
-                <select class="form-input" id="injuryPart">
-                  <option value="">选择部位</option>
-                  <option value="膝盖">膝盖</option>
-                  <option value="小腿">小腿</option>
-                  <option value="大腿">大腿</option>
-                  <option value="脚踝">脚踝</option>
-                  <option value="足底">足底</option>
-                  <option value="跟腱">跟腱</option>
-                  <option value="髋关节">髋关节</option>
-                  <option value="背部">背部</option>
-                  <option value="其他">其他</option>
-                </select>
+              <div class="form-group full">
+                <label class="form-label">伤病部位（可多选）</label>
+                <div id="injuryParts" style="display:flex;flex-wrap:wrap;gap:8px">
+                  <span class="ip-chip" data-part="膝盖" onclick="toggleInjuryPart(this)">膝盖</span>
+                  <span class="ip-chip" data-part="小腿" onclick="toggleInjuryPart(this)">小腿</span>
+                  <span class="ip-chip" data-part="大腿" onclick="toggleInjuryPart(this)">大腿</span>
+                  <span class="ip-chip" data-part="脚踝" onclick="toggleInjuryPart(this)">脚踝</span>
+                  <span class="ip-chip" data-part="足底" onclick="toggleInjuryPart(this)">足底</span>
+                  <span class="ip-chip" data-part="跟腱" onclick="toggleInjuryPart(this)">跟腱</span>
+                  <span class="ip-chip" data-part="髋关节" onclick="toggleInjuryPart(this)">髋关节</span>
+                  <span class="ip-chip" data-part="背部" onclick="toggleInjuryPart(this)">背部</span>
+                  <span class="ip-chip" data-part="其他" onclick="toggleInjuryPart(this)">其他</span>
+                </div>
+                <input type="text" class="form-input" id="injuryPartOther" placeholder="其他部位请填写，如：胫骨前肌" style="display:none;margin-top:8px">
               </div>
               <div class="form-group">
-                <label class="form-label">严重程度</label>
+                <label class="form-label">严重程度 (1-5)</label>
                 <div class="range-container">
-                  <input type="range" class="range-slider" id="injurySeverity" min="1" max="10" value="3">
-                  <div class="range-value" id="severityValue">3</div>
+                  <input type="range" class="range-slider" id="injurySeverity" min="1" max="5" value="2">
+                  <div class="range-value" id="severityValue">2</div>
                 </div>
               </div>
             </div>
@@ -1772,11 +1775,11 @@
           </div>
           <div class="form-section-content">
             <div class="form-group">
-              <label class="form-label">疲劳指数 (1-10)</label>
+              <label class="form-label">疲劳指数 (1-5)</label>
               <div class="range-container">
                 <div class="range-labels"><span>精神饱满</span><span>极度疲劳</span></div>
-                <input type="range" class="range-slider" id="fatigueLevel" min="1" max="10" value="5">
-                <div class="range-value" id="fatigueValue">5</div>
+                <input type="range" class="range-slider" id="fatigueLevel" min="1" max="5" value="3">
+                <div class="range-value" id="fatigueValue">3</div>
               </div>
             </div>
             <div class="form-group">
@@ -1795,6 +1798,10 @@
               <div class="form-group">
                 <label class="form-label">静息心率 (BPM)</label>
                 <input type="number" class="form-input" id="restingHR" placeholder="60" min="30" max="200">
+              </div>
+              <div class="form-group">
+                <label class="form-label">HRV (ms，选填)</label>
+                <input type="number" class="form-input" id="hrvValue" placeholder="如 68" min="5" max="300">
               </div>
             </div>
           </div>
@@ -1911,15 +1918,9 @@
             <svg class="chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
           </div>
           <div class="form-section-content">
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">晨起体重 (kg)</label>
-                <input type="number" class="form-input" id="morningWeight" placeholder="65.0" step="0.1" min="20" max="200">
-              </div>
-              <div class="form-group">
-                <label class="form-label">睡前体重 (kg)</label>
-                <input type="number" class="form-input" id="eveningWeight" placeholder="65.5" step="0.1" min="20" max="200">
-              </div>
+            <div class="form-group">
+              <label class="form-label">体重 (kg · 每天晨起空腹记一次)</label>
+              <input type="number" class="form-input" id="bodyWeight" placeholder="65.0" step="0.1" min="20" max="200">
             </div>
           </div>
         </div>
@@ -2495,7 +2496,9 @@
       }
 
       // Injury
-      const injuryPart = document.getElementById('injuryPart').value;
+      const injuryPartsSel = [...document.querySelectorAll('#injuryParts .ip-chip.active')].map(el => el.dataset.part);
+      const otherTxt = document.getElementById('injuryPartOther').value.trim();
+      const injuryPart = injuryPartsSel.map(p => p === '其他' && otherTxt ? `其他(${otherTxt})` : p).join('、');
       if (injuryPart) {
         const injury = {
           id: generateId(),
@@ -2516,6 +2519,7 @@
       const sleepQuality = parseInt(document.getElementById('sleepQuality').value);
       const sleepHours = parseFloat(document.getElementById('sleepHours').value) || 0;
       const restingHR = parseInt(document.getElementById('restingHR').value) || 0;
+      const hrv = parseFloat(document.getElementById('hrvValue').value) || null;
 
       if (fatigue || sleepQuality || sleepHours) {
         const recovery = {
@@ -2524,7 +2528,8 @@
           fatigue: fatigue,
           sleepQuality: sleepQuality,
           sleepHours: sleepHours,
-          restingHR: restingHR
+          restingHR: restingHR,
+          hrv: hrv
         };
 
         let recoveries = loadFromStorage('recovery');
@@ -2588,16 +2593,13 @@
       }
 
       // Body
-      const morningWeight = parseFloat(document.getElementById('morningWeight').value);
-      const eveningWeight = parseFloat(document.getElementById('eveningWeight').value);
+      const weight = parseFloat(document.getElementById('bodyWeight').value);
 
-      if (morningWeight || eveningWeight) {
+      if (weight) {
         const body = {
           id: generateId(),
           date: today,
-          morningWeight: morningWeight || null,
-          eveningWeight: eveningWeight || null,
-          weight: morningWeight || eveningWeight
+          weight: weight
         };
 
         let bodies = loadFromStorage('body');
@@ -2621,16 +2623,18 @@
       document.getElementById('trainingType').value = '';
       document.getElementById('trainingDistance').value = '';
       document.getElementById('trainingDuration').value = '';
-      document.getElementById('trainingRpe').value = '5';
-      document.getElementById('rpeValue').textContent = '5';
+      document.getElementById('trainingRpe').value = '3';
+      document.getElementById('rpeValue').textContent = '3';
       document.getElementById('trainingWeather').value = '';
       document.getElementById('trainingNotes').value = '';
       document.getElementById('trainingHr').value = '';
       document.getElementById('trainingCompletion').value = '按计划完成';
       document.getElementById('trainingExtra').value = '';
-      document.getElementById('injuryPart').value = '';
-      document.getElementById('injurySeverity').value = '3';
-      document.getElementById('severityValue').textContent = '3';
+      document.querySelectorAll('#injuryParts .ip-chip').forEach(c => c.classList.remove('active'));
+      document.getElementById('injuryPartOther').value = '';
+      document.getElementById('injuryPartOther').style.display = 'none';
+      document.getElementById('injurySeverity').value = '2';
+      document.getElementById('severityValue').textContent = '2';
       document.getElementById('injurySymptom').value = '';
       document.getElementById('injuryTreatment').value = '';
       document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
@@ -2639,8 +2643,8 @@
       selectedWater = 0;
       updateWaterDisplay();
       document.getElementById('dietNotes').value = '';
-      document.getElementById('morningWeight').value = '';
-      document.getElementById('eveningWeight').value = '';
+      document.getElementById('bodyWeight').value = '';
+      document.getElementById('hrvValue').value = '';
     }
 
     // Load Today Data
@@ -2687,9 +2691,9 @@
       const analysis = [];
 
       if (training) {
-        if (training.rpe <= 5) {
-          analysis.push({ type: 'good', title: '训练强度适中', desc: `RPE ${training.rpe}，感觉良好，继续保持！` });
-        } else if (training.rpe <= 7) {
+        if (training.rpe <= 2) {
+          analysis.push({ type: 'good', title: '训练强度适中', desc: `RPE ${training.rpe}/5，感觉良好，继续保持！` });
+        } else if (training.rpe <= 3) {
           analysis.push({ type: 'warning', title: '训练强度较高', desc: '注意休息和恢复，避免连续高强度训练。' });
         } else {
           analysis.push({ type: 'danger', title: '训练强度过高', desc: '建议降低强度，避免过度训练和伤病风险。' });
@@ -2701,7 +2705,7 @@
       }
 
       if (recovery) {
-        if (recovery.fatigue >= 7) {
+        if (recovery.fatigue >= 4) {
           analysis.push({ type: 'warning', title: '疲劳指数偏高', desc: '建议增加休息时间，保证充足睡眠。' });
         }
         if (recovery.sleepHours < 7) {
@@ -2846,8 +2850,7 @@
                 <div>
                   <div class="history-title">体重记录</div>
                   <div class="history-stats">
-                    <span class="history-stat">晨起 <span>${record.morningWeight || '-'}</span> kg</span>
-                    <span class="history-stat">睡前 <span>${record.eveningWeight || '-'}</span> kg</span>
+                    <span class="history-stat"><span>${record.weight || record.morningWeight || '-'}</span> kg</span>
                   </div>
                 </div>
                 <div class="history-actions">
@@ -3795,13 +3798,53 @@
       return out;
     }
 
+    // 课表拆分 + 完成勾选
+    function splitPlanItems(raw) {
+      return raw.split(/\s+-\s+|。\s*|\n+/)
+        .map(s => s.replace(/^(全部|团队|组别|训练地点[:：]?|\s)+/g, '').trim())
+        .filter(s => s.length >= 6);
+    }
+    function planDoneMap() {
+      return JSON.parse(localStorage.getItem('marathon_plan_done') || '{}');
+    }
+    function togglePlanItem(date, idx) {
+      const all = planDoneMap();
+      const cur = all[date] || {};
+      cur[idx] = !cur[idx];
+      all[date] = cur;
+      localStorage.setItem('marathon_plan_done', JSON.stringify(all));
+      renderDayPlan(date);
+    }
+
     // 记录页顶部：当日课表 + 注意事项 + 按课表预填
     function renderDayPlan(date) {
       const card = document.getElementById('dayPlanCard');
       const p = getPlanForDate(date);
       if (!p) { card.style.display = 'none'; return; }
       card.style.display = 'block';
-      document.getElementById('dayPlanText').textContent = p.raw;
+      // 课表拆成可勾选清单（同日跑步+力量可分别勾选；已记录训练自动勾同类项）
+      const items = splitPlanItems(p.raw);
+      const all = planDoneMap();
+      const doneMap = all[date] || {};
+      const rec = loadFromStorage('training').find(x => x.date === date);
+      if (rec && rec.type) {
+        let changed = false;
+        items.forEach((it, i) => {
+          if (doneMap[i] !== undefined) return;
+          const isRunItem = /跑|配速|\d+\s*[kK㎞]/i.test(it);
+          const isStrItem = /力量|核心|技术|hyrox/i.test(it);
+          if ((['长跑', 'E跑', '间歇跑', '节奏跑'].includes(rec.type) && isRunItem) ||
+              (rec.type === '力量训练' && isStrItem)) { doneMap[i] = true; changed = true; }
+        });
+        if (changed) { all[date] = doneMap; localStorage.setItem('marathon_plan_done', JSON.stringify(all)); }
+      }
+      document.getElementById('dayPlanText').innerHTML = items.length > 1
+        ? items.map((it, i) => `
+            <label style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;cursor:pointer">
+              <input type="checkbox" ${doneMap[i] ? 'checked' : ''} onchange="togglePlanItem('${date}',${i})" style="margin-top:3px;accent-color:var(--primary)">
+              <span style="${doneMap[i] ? 'text-decoration:line-through;color:var(--text-secondary)' : ''}">${it}</span>
+            </label>`).join('')
+        : p.raw;
       document.getElementById('dayPlanType').textContent = p.type || '训练';
       const tip = (p.type && COACH_TYPE_TIPS[p.type]) || '';
       const tipEl = document.getElementById('dayPlanTip');
@@ -3829,8 +3872,8 @@
         set('trainingType', t.type || '');
         set('trainingDistance', t.distance || '');
         set('trainingDuration', t.duration || '');
-        set('trainingRpe', t.rpe || 5);
-        document.getElementById('rpeValue').textContent = t.rpe || 5;
+        set('trainingRpe', t.rpe || 3);
+        document.getElementById('rpeValue').textContent = t.rpe || 3;
         set('trainingHr', t.hr || '');
         set('trainingCompletion', t.completion || '按计划完成');
         set('trainingExtra', t.extra || '');
@@ -3839,8 +3882,8 @@
       } else {
         ['trainingType', 'trainingDistance', 'trainingDuration', 'trainingHr', 'trainingExtra', 'trainingWeather', 'trainingNotes']
           .forEach(id => set(id, ''));
-        set('trainingRpe', 5);
-        document.getElementById('rpeValue').textContent = '5';
+        set('trainingRpe', 3);
+        document.getElementById('rpeValue').textContent = '3';
         set('trainingCompletion', '按计划完成');
       }
       renderTypeTip.call(document.getElementById('trainingType'));
@@ -3850,13 +3893,14 @@
     // 从计划文本猜测训练类型（用于预填）
     function guessPlanType(text) {
       if (!text) return '';
-      if (/休息/.test(text)) return '休息日';
       if (/间歇|重复|变速/.test(text)) return '间歇跑';
       if (/节奏|tempo/i.test(text)) return '节奏跑';
       if (/力量|核心|技术练习|hyrox|体能训练/i.test(text)) return '力量训练';
       if (/骑行|游泳|划船|椭圆|单车|桨板/i.test(text)) return '交叉训练';
       if (/长跑|长距离|lsd|稳定配速|耐力跑|耐力训练/i.test(text)) return '长跑';
       if (/恢复跑|恢复训练|恢复日|放松|慢跑|轻松|E跑/i.test(text)) return 'E跑';
+      // 「休息」必须放最后且从严：防止"组间休息90秒"误判为休息日
+      if (/^\s*休息/.test(text) || text.trim() === '休息') return '休息日';
       return '';
     }
 
@@ -3974,7 +4018,7 @@
 
       const wkInj = injuries.filter(x => dates.includes(x.date));
       document.getElementById('weeklyInjuries').textContent = wkInj.length
-        ? '⚠️ 本周伤病记录：' + wkInj.map(x => `${x.date.slice(5)} ${x.bodyPart}(严重度${x.severity}/10)`).join('；')
+        ? '⚠️ 本周伤病记录：' + wkInj.map(x => `${x.date.slice(5)} ${x.bodyPart}(严重度${x.severity}/5)`).join('；')
         : '✅ 本周无伤病记录';
 
       const wkRec = recovery.filter(x => dates.includes(x.date));
@@ -4085,6 +4129,14 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       });
+    }
+
+    // 伤病部位多选
+    function toggleInjuryPart(el) {
+      el.classList.toggle('active');
+      const other = document.querySelector('#injuryParts .ip-chip[data-part="其他"]');
+      document.getElementById('injuryPartOther').style.display =
+        other && other.classList.contains('active') ? 'block' : 'none';
     }
 
     /* ================= 三本账 · 教练强化系统 ================= */
