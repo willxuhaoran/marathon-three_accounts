@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.15.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.15.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -4207,6 +4207,41 @@
       if (/技术/.test(content)) return '技术练习';
       return '综合力量';
     }
+    // 模板口径短分类（同日双课用 / 并列：力量/恢复）
+    function speedSubShort(text) {
+      if (/变速/.test(text)) return '（变速）';
+      if (/重复跑|间歇/.test(text)) return '（间歇）';
+      if (/节奏|tempo/i.test(text)) return '（节奏）';
+      return '';
+    }
+    function planCategoryShort(text) {
+      if (!text) return '';
+      const cats = [];
+      if (/力量训练|核心力量|弓步|负重|技术练习|hyrox|体能训练/i.test(text)) cats.push('力量');
+      if (/速度训练|间歇|重复跑|变速/i.test(text)) cats.push('速度' + speedSubShort(text));
+      if (/耐力训练|耐力跑|稳定配速|渐加速|长距离|lsd/i.test(text)) cats.push('耐力');
+      if (/恢复训练|放松|慢跑/i.test(text) && !cats.some(c => c.startsWith('速度') || c === '耐力')) cats.push('恢复');
+      if (/交叉|骑行|游泳/i.test(text)) cats.push('交叉');
+      if (!cats.length && /休息/.test(text)) cats.push('休息');
+      return [...new Set(cats)].join('/');
+    }
+    function recordCategoryShort(t) {
+      if (!t || !t.type) return '';
+      return { '间歇跑': '速度（间歇）', '节奏跑': '速度（节奏）', '长跑': '耐力', 'E跑': '恢复', '力量训练': '力量', '交叉训练': '交叉', '休息日': '休息' }[t.type] || t.type;
+    }
+    // 实际完成情况格式（对照模板：16.74km / 5:03 / 85min）
+    function fmtActual(x) {
+      if (x.type === '力量训练') return `力量训练 ${x.dur || 0}min` + (x.hr ? ` / 均心率${x.hr}` : '');
+      if (!x.dist && !x.dur) return x.actual === '—' ? '' : x.actual;
+      const cells = [];
+      if (x.dist) cells.push(`${x.dist}km`);
+      if (x.dist && x.dur) { const s = x.dur / x.dist * 60; cells.push(`/ ${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`); }
+      if (x.dur) cells.push(`/ ${x.dur}min`);
+      if (x.hr) cells.push(`均心率${x.hr}`);
+      let out = cells.join(' ');
+      if (x.completion && x.completion !== '按计划完成') out += ` ⚠${x.completion}`;
+      return out;
+    }
 
     /* ================= 周报模块 ================= */
     let weeklyOffset = 0;
@@ -4334,9 +4369,12 @@
           actual,
           extra: t && t.extra ? t.extra : '无',
           notes: t && t.notes ? t.notes : '',
-          planCat: planRaw ? planCategory(planRaw) : '',
-          recordCat: t ? recordCategory(t) : '',
-          strength: strText
+          planCat: planRaw ? planCategoryShort(planRaw) : '',
+          recordCat: t ? recordCategoryShort(t) : '',
+          strength: strText,
+          dist: t ? (t.distance || 0) : 0,
+          dur: t ? (t.duration || 0) : 0,
+          hr: t ? (t.hr || null) : null
         };
       });
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
@@ -4429,9 +4467,9 @@
       tc.alignment = { horizontal: 'center', vertical: 'middle' };
       ws.getRow(1).height = 34;
 
-      // 表头
+      // 表头（对照模板：实际完成不特指跑步；力量归入额外训练列）
       const hr2 = ws.getRow(2);
-      hr2.values = ['日期', '训练类型', '训练计划内容', '实际完成情况（跑步）', '力量训练', '训练感受与分析'];
+      hr2.values = ['日期', '训练类型', '训练计划内容', '实际完成情况', '额外训练', '训练感受'];
       hr2.height = 24;
       hr2.eachCell(c => {
         c.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
@@ -4440,9 +4478,10 @@
         c.border = border;
       });
 
-      // 数据行：类型按课表口径（速度训练细分、同日跑步+力量并列），力量独立成列
+      // 数据行：类型按课表口径（短名/细分/双课并列），实际完成按模板格式（km / 配速 / min）
       rows.forEach((x, i) => {
-        const row = ws.addRow([x.day, x.planCat || x.recordCat || x.type, x.plan, x.actual, x.strength, x.notes]);
+        const extraCell = x.strength || (x.extra !== '无' ? x.extra : '') || '无';
+        const row = ws.addRow([x.day, x.planCat || x.recordCat || '', x.plan, fmtActual(x), extraCell, x.notes]);
         row.height = 56;
         row.eachCell(c => { c.alignment = { vertical: 'top', wrapText: true }; c.border = border; c.font = { size: 10 }; });
         row.getCell(1).font = { size: 10, bold: true };
@@ -4458,8 +4497,7 @@
       const summaryRows = [
         [`疲劳程度：${r.fatigue}（1-5）`, `伤病指数：${r.injury}（1-5）`],
         [`伤病与疲劳管理：${r.management || '—'}`],
-        [`力量训练合计：${strDays} 天（次）${typeDetail}`],
-        ['本周总结', '', `本周跑量：约${totalKm.toFixed(0)}km`, r.summary || '']
+        ['本周总结', '', `本周跑量：约${totalKm.toFixed(0)}km ｜ 力量训练：${strDays}天（次）${typeDetail}`, r.summary || '']
       ];
       summaryRows.forEach((vals, i) => {
         const row = ws.addRow(vals);
@@ -4469,12 +4507,11 @@
           c.font = { size: 10.5 };
           c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 0 ? 'FFFFF7ED' : 'FFF0FDF4' } };
         });
-        row.height = (i === 1 || i === 3) ? 42 : 24;
+        row.height = (i === 1 || i === 2) ? 42 : 24;
       });
       ws.mergeCells(s0 + 1, 1, s0 + 1, 6);
-      ws.mergeCells(s0 + 2, 1, s0 + 2, 6);
-      ws.mergeCells(s0 + 3, 4, s0 + 3, 6);
-      ws.getCell(s0 + 3, 1).font = { bold: true, size: 10.5 };
+      ws.mergeCells(s0 + 2, 4, s0 + 2, 6);
+      ws.getCell(s0 + 2, 1).font = { bold: true, size: 10.5 };
 
       // 写出 + 手机分享 / 桌面下载
       const fname = `三本账周报-${dates[0]}.xlsx`;
