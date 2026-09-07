@@ -4217,7 +4217,8 @@
     function planCategoryShort(text) {
       if (!text) return '';
       const cats = [];
-      if (/力量训练|核心力量|弓步|负重|技术练习|hyrox|体能训练/i.test(text)) cats.push('力量');
+      if (/力量训练|核心力量|弓步|负重|hyrox|体能训练/i.test(text)) cats.push('力量');
+      if (/技术练习|技术训练/.test(text)) cats.push('技术');
       if (/速度训练|间歇|重复跑|变速/i.test(text)) cats.push('速度' + speedSubShort(text));
       if (/耐力训练|耐力跑|稳定配速|渐加速|长距离|lsd/i.test(text)) cats.push('耐力');
       if (/恢复训练|放松|慢跑/i.test(text) && !cats.some(c => c.startsWith('速度') || c === '耐力')) cats.push('恢复');
