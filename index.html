@@ -9,7 +9,7 @@
   <title>三本账 · 后半程不撞墙</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="xlsx.full.min.js"></script>
+  <script src="exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.14.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.15.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -4176,6 +4176,38 @@
       }
     }
 
+    // 课表口径的训练分类（速度训练细分：节奏跑/变速跑/间歇重复跑；同日跑步+力量并列）
+    function speedSub(text) {
+      if (/变速/.test(text)) return '（变速跑）';
+      if (/重复跑|间歇/.test(text)) return '（间歇/重复跑）';
+      if (/节奏|tempo/i.test(text)) return '（节奏跑）';
+      return '';
+    }
+    function planCategory(text) {
+      if (!text) return '';
+      const cats = [];
+      if (/力量训练|核心力量|弓步|负重|技术练习|hyrox|体能训练/i.test(text)) cats.push('力量训练');
+      if (/速度训练|间歇|重复跑|变速/i.test(text)) cats.push('速度训练' + speedSub(text));
+      if (/耐力训练|耐力跑|稳定配速|渐加速|长距离|lsd/i.test(text)) cats.push('耐力训练');
+      if (/恢复训练|放松|慢跑/i.test(text) && !cats.some(c => c.startsWith('速度') || c === '耐力训练')) cats.push('恢复训练');
+      if (!cats.length && /休息/.test(text)) cats.push('休息');
+      return [...new Set(cats)].join('＋');
+    }
+    function recordCategory(t) {
+      if (!t || !t.type) return '';
+      return { '间歇跑': '速度训练（间歇/重复跑）', '节奏跑': '速度训练（节奏跑）', '长跑': '耐力训练', 'E跑': '恢复训练', '力量训练': '力量训练', '交叉训练': '交叉训练', '休息日': '休息' }[t.type] || t.type;
+    }
+    // 力量内容细分
+    function strengthKind(content) {
+      if (/弓步/.test(content)) return '弓步力量';
+      if (/hyrox|综合体能/i.test(content)) return '综合体能';
+      if (/核心/.test(content)) return '核心力量';
+      if (/上肢/.test(content)) return '上肢力量';
+      if (/下肢|腿部|深蹲|负重/.test(content)) return '下肢力量';
+      if (/技术/.test(content)) return '技术练习';
+      return '综合力量';
+    }
+
     /* ================= 周报模块 ================= */
     let weeklyOffset = 0;
 
@@ -4268,28 +4300,46 @@
       const decoupling = JSON.parse(localStorage.getItem('marathon_decoupling_records') || '[]');
       const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       let totalKm = 0, strengthMin = 0, strengthCnt = 0;
+      const strDaySet = new Set();
+      const strTypeMap = {};
       const rows = dates.map((d, i) => {
         const t = trainings.find(x => x.date === d);
         if (t && t.distance) totalKm += t.distance;
         const dc = decoupling.find(x => x.date === d);
         let actual = '—';
+        let strText = '';
         if (t) {
           actual = `${t.type} ${t.distance || 0}km ${t.duration || 0}min` + (t.hr ? ` 均心率${t.hr}bpm` : '');
           if (t.completion) actual += `（${t.completion}）`;
           if (dc) actual += `\n解耦漂移 ${dc.drift}%`;
           const sm = (t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0);
           if (sm) { strengthMin += sm; strengthCnt++; if (t.type !== '力量训练') actual += `\n＋力量${sm}min`; }
+          // 力量按天计次 + 内容细分（主课/力量区块/额外文本都算）
+          const content = `${t.extra || ''} ${t.type === '力量训练' ? '力量' : ''}`;
+          const hasStr = sm > 0 || /力量|核心|hyrox|弓步/i.test(t.extra || '');
+          if (hasStr) {
+            strDaySet.add(d);
+            const kind = strengthKind(content);
+            strTypeMap[kind] = (strTypeMap[kind] || 0) + 1;
+            strText = (t.type !== '力量训练' ? (t.extra || '力量训练') + ' ' : (t.extra ? t.extra + ' ' : ''))
+              + (sm ? `${sm}min` : '') + (t.strengthHr ? ` HR${t.strengthHr}` : '');
+            strText = strText.trim();
+          }
         }
+        const planRaw = (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '';
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
           type: t ? t.type : '—',
-          plan: (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '',
+          plan: planRaw,
           actual,
           extra: t && t.extra ? t.extra : '无',
-          notes: t && t.notes ? t.notes : ''
+          notes: t && t.notes ? t.notes : '',
+          planCat: planRaw ? planCategory(planRaw) : '',
+          recordCat: t ? recordCategory(t) : '',
+          strength: strText
         };
       });
-      return { dates, rows, totalKm, strengthMin, strengthCnt };
+      return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
     }
 
     function renderWeekly(offset = 0) {
@@ -4361,43 +4411,88 @@
         showToast('微信内无法下载文件，已复制文本版，直接粘贴到群里即可', 'success');
         return;
       }
-      if (typeof XLSX === 'undefined') { showToast('表格组件未加载，请刷新后重试', 'error'); return; }
+      if (typeof ExcelJS === 'undefined') { showToast('表格组件未加载，请刷新后重试', 'error'); return; }
       const r = saveWeeklyReport(true);
-      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
-      const aoa = [
-        [`周训练情况反馈 (${dates[0]} - ${dates[6]})`],
-        ['日期', '训练类型', '训练计划内容', '实际完成情况', '额外训练', '训练感受与分析'],
-        ...rows.map(x => [x.day, x.type, x.plan, x.actual, x.extra, x.notes]),
-        [`疲劳程度: ${r.fatigue} (1-5)`, `伤病指数: ${r.injury} (1-5)`],
+      const { dates, rows, totalKm, strDays, strTypeMap } = collectWeeklyData();
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('周报');
+      ws.columns = [{ width: 13 }, { width: 18 }, { width: 40 }, { width: 36 }, { width: 20 }, { width: 42 }];
+      const thin = { style: 'thin', color: { argb: 'FFD8E0EA' } };
+      const border = { top: thin, left: thin, bottom: thin, right: thin };
+
+      // 标题行
+      ws.mergeCells(1, 1, 1, 6);
+      const tc = ws.getCell(1, 1);
+      tc.value = `周训练情况反馈（${dates[0]} 至 ${dates[6]}）`;
+      tc.font = { bold: true, size: 15, color: { argb: 'FFFFFFFF' } };
+      tc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      tc.alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getRow(1).height = 34;
+
+      // 表头
+      const hr2 = ws.getRow(2);
+      hr2.values = ['日期', '训练类型', '训练计划内容', '实际完成情况（跑步）', '力量训练', '训练感受与分析'];
+      hr2.height = 24;
+      hr2.eachCell(c => {
+        c.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+        c.border = border;
+      });
+
+      // 数据行：类型按课表口径（速度训练细分、同日跑步+力量并列），力量独立成列
+      rows.forEach((x, i) => {
+        const row = ws.addRow([x.day, x.planCat || x.recordCat || x.type, x.plan, x.actual, x.strength, x.notes]);
+        row.height = 56;
+        row.eachCell(c => { c.alignment = { vertical: 'top', wrapText: true }; c.border = border; c.font = { size: 10 }; });
+        row.getCell(1).font = { size: 10, bold: true };
+        row.getCell(2).font = { size: 10, bold: true, color: { argb: 'FF059669' } };
+        if (i % 2 === 1) row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F7FA' } }; });
+      });
+
+      // 汇总区
+      const s0 = rows.length + 3;
+      const typeDetail = Object.keys(strTypeMap).length
+        ? '｜' + Object.entries(strTypeMap).map(([k, v]) => `${k}×${v}`).join('，')
+        : '';
+      const summaryRows = [
+        [`疲劳程度：${r.fatigue}（1-5）`, `伤病指数：${r.injury}（1-5）`],
         [`伤病与疲劳管理：${r.management || '—'}`],
-        [`力量训练合计：${strengthCnt}次 · 共${strengthMin}分钟`],
-        ['本周总结', '', `本周跑量: 约${totalKm.toFixed(0)}km`, r.summary || '']
+        [`力量训练合计：${strDays} 天（次）${typeDetail}`],
+        ['本周总结', '', `本周跑量：约${totalKm.toFixed(0)}km`, r.summary || '']
       ];
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [{ wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 40 }, { wch: 16 }, { wch: 44 }];
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-        { s: { r: rows.length + 3, c: 0 }, e: { r: rows.length + 3, c: 5 } },
-        { s: { r: rows.length + 4, c: 0 }, e: { r: rows.length + 4, c: 5 } },
-        { s: { r: rows.length + 5, c: 3 }, e: { r: rows.length + 5, c: 5 } }
-      ];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, '周报');
+      summaryRows.forEach((vals, i) => {
+        const row = ws.addRow(vals);
+        row.eachCell(c => {
+          c.border = border;
+          c.alignment = { vertical: 'middle', wrapText: true };
+          c.font = { size: 10.5 };
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 0 ? 'FFFFF7ED' : 'FFF0FDF4' } };
+        });
+        row.height = (i === 1 || i === 3) ? 42 : 24;
+      });
+      ws.mergeCells(s0 + 1, 1, s0 + 1, 6);
+      ws.mergeCells(s0 + 2, 1, s0 + 2, 6);
+      ws.mergeCells(s0 + 3, 4, s0 + 3, 6);
+      ws.getCell(s0 + 3, 1).font = { bold: true, size: 10.5 };
+
+      // 写出 + 手机分享 / 桌面下载
       const fname = `三本账周报-${dates[0]}.xlsx`;
-      // 手机优先走系统分享（可存文件/发微信）；桌面直接下载
+      const buf = await wb.xlsx.writeBuffer();
       try {
-        const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-        const bin = atob(b64);
-        const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        const file = new File([arr], fname, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const file = new File([buf], fname, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({ files: [file], title: fname });
           showToast('已调起分享：可存到「文件」或直接发送', 'success');
           return;
         }
       } catch (e) { console.error(e); }
-      XLSX.writeFile(wb, fname);
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      a.click();
+      URL.revokeObjectURL(a.href);
       showToast('已导出 xlsx', 'success');
     }
 
@@ -4418,7 +4513,7 @@
 
     function copyWeeklyText() {
       const r = saveWeeklyReport(true);
-      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
+      const { dates, rows, totalKm, strDays, strTypeMap } = collectWeeklyData();
       const lines = [`周训练情况反馈 (${dates[0].slice(5)} - ${dates[6].slice(5)})`, ''];
       rows.forEach(x => {
         lines.push(`【${x.day}】${x.type}`);
@@ -4431,7 +4526,7 @@
       lines.push(`疲劳程度：${r.fatigue}/5 ｜ 伤病指数：${r.injury}/5`);
       if (r.management) lines.push(`伤病与疲劳管理：${r.management}`);
       lines.push(`本周跑量：约${totalKm.toFixed(0)}km`);
-      if (strengthCnt) lines.push(`力量训练：${strengthCnt}次 · 共${strengthMin}分钟`);
+      if (strDays) lines.push(`力量训练：${strDays} 天（次）${Object.keys(strTypeMap).length ? '｜' + Object.entries(strTypeMap).map(([k, v]) => `${k}×${v}`).join('，') : ''}`);
       if (r.summary) lines.push(`本周总结：${r.summary}`);
       const text = lines.join('\n');
       const fallback = () => {
