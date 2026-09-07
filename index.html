@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.13.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.14.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1535,6 +1535,12 @@
 
     <!-- Main Content -->
     <main class="main-content">
+      <!-- 微信内置浏览器提示 -->
+      <div id="wechatBanner" style="display:none;margin-bottom:14px;padding:12px 16px;background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.5);border-radius:12px;font-size:13px;line-height:1.7">
+        ⚠️ 你正在<b>微信内置浏览器</b>中：无法下载导出文件，且数据不会同步到浏览器 App。<br>
+        请点右上角「···」→「在浏览器打开」（Safari/Chrome）使用，数据才会长期保存。
+        <div style="margin-top:8px"><button class="dc-btn" style="background:var(--secondary);font-size:12px;padding:6px 14px" onclick="copyAppLink()">复制本页链接，去浏览器粘贴打开</button></div>
+      </div>
       <!-- Today Tab -->
       <div class="tab-content active" id="tab-today">
         <!-- 三本账 · 每日教练横幅 -->
@@ -1972,6 +1978,14 @@
           <button class="filter-btn" data-filter="injury" onclick="filterRecords('injury')">伤病</button>
           <button class="filter-btn" data-filter="recovery" onclick="filterRecords('recovery')">恢复</button>
           <button class="filter-btn" data-filter="body" onclick="filterRecords('body')">体重</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="exportAllData()">📤 备份数据（复制）</button>
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="toggleImportBox()">📥 恢复数据（粘贴）</button>
+        </div>
+        <div id="importBox" style="display:none;margin-bottom:12px">
+          <textarea class="form-input" id="importText" rows="4" placeholder="把备份的 JSON 粘贴到这里"></textarea>
+          <button class="dc-btn" style="margin-top:8px" onclick="importAllData()">确认恢复</button>
         </div>
         <div id="recordsList"></div>
       </div>
@@ -4092,6 +4106,55 @@
     }
 
     // Toast
+    /* ===== 微信环境检测 & 数据备份/恢复 ===== */
+    const IS_WECHAT = /MicroMessenger/i.test(navigator.userAgent);
+    if (IS_WECHAT) {
+      document.addEventListener('DOMContentLoaded', () => {
+        const b = document.getElementById('wechatBanner');
+        if (b) b.style.display = 'block';
+      });
+    }
+    function copyAppLink() {
+      const url = location.href;
+      const done = () => showToast('链接已复制，去浏览器地址栏粘贴打开', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(done);
+      } else { done(); }
+    }
+    function exportAllData() {
+      const keys = ['marathon_training_records', 'marathon_injury_records', 'marathon_recovery_records',
+        'marathon_mental_records', 'marathon_diet_records', 'marathon_body_records', 'marathon_goals',
+        'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done'];
+      const data = {};
+      keys.forEach(k => { const v = localStorage.getItem(k); if (v) { try { data[k] = JSON.parse(v); } catch (e) { data[k] = v; } } });
+      const json = JSON.stringify({ app: '三本账', version: 'v1.13.1', exportedAt: new Date().toISOString(), data }, null, 1);
+      const done = () => showToast('备份已复制，粘贴到备忘录/微信收藏保存', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(json).then(done).catch(() => { prompt('长按复制以下内容：', json); });
+      } else { prompt('长按复制以下内容：', json); }
+    }
+    function toggleImportBox() {
+      const b = document.getElementById('importBox');
+      b.style.display = b.style.display === 'none' ? 'block' : 'none';
+    }
+    function importAllData() {
+      const raw = document.getElementById('importText').value.trim();
+      if (!raw) { showToast('请先粘贴备份内容', 'error'); return; }
+      try {
+        const pkg = JSON.parse(raw);
+        const data = pkg.data || pkg;
+        if (typeof data !== 'object' || !data) throw new Error('bad');
+        let n = 0;
+        Object.keys(data).forEach(k => {
+          if (k.startsWith('marathon_')) { localStorage.setItem(k, JSON.stringify(data[k])); n++; }
+        });
+        showToast(`已恢复 ${n} 类数据，即将刷新`, 'success');
+        setTimeout(() => location.reload(), 1200);
+      } catch (e) {
+        showToast('内容格式不对，请完整粘贴备份 JSON', 'error');
+      }
+    }
+
     /* ================= 周报模块 ================= */
     let weeklyOffset = 0;
 
@@ -4270,6 +4333,11 @@
     }
 
     async function exportWeeklyXlsx() {
+      if (IS_WECHAT) {
+        copyWeeklyText();
+        showToast('微信内无法下载文件，已复制文本版，直接粘贴到群里即可', 'success');
+        return;
+      }
       if (typeof XLSX === 'undefined') { showToast('表格组件未加载，请刷新后重试', 'error'); return; }
       const r = saveWeeklyReport(true);
       const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
