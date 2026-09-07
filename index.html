@@ -1500,7 +1500,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.14.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.14.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2101,7 +2101,7 @@
             <tbody id="weeklyTbody"></tbody>
           </table>
           <div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)" id="weeklyInjuries"></div>
-          <div style="margin-top:6px;font-size:11.5px;color:var(--surface-lighter)">计划列来自「计划」页最近导入的周计划</div>
+          <div style="margin-top:6px;font-size:11.5px;color:var(--surface-lighter)">计划列按周对应已导入的课表，互不覆盖</div>
         </div>
 
         <div class="card" style="padding:18px;margin-bottom:16px">
@@ -2310,6 +2310,13 @@
             </div>
           </div>
 
+          <div style="margin-top:14px;display:flex;align-items:center;gap:10px">
+            <label style="font-size:13px;color:var(--text-secondary);white-space:nowrap">应用到：</label>
+            <select class="form-input" id="planWeekChoice" style="flex:1">
+              <option value="0">本周</option>
+              <option value="1">下周</option>
+            </select>
+          </div>
           <button class="btn btn-primary" onclick="importPlan()" style="margin-top: 16px;">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
             导入到本周
@@ -3252,7 +3259,9 @@
     // Training Plan Functions
     function loadWeekPlan() {
       const weekDates = getWeekDates(0);
-      const weekPlan = loadFromStorage('plan');
+      const hist = JSON.parse(localStorage.getItem('marathon_plan_history') || '{}');
+      const legacy = loadFromStorage('plan');
+      const weekPlan = hist[weekDates[0]] || ((legacy && legacy.days && (!legacy.weekStart || legacy.weekStart === weekDates[0])) ? legacy : null);
       const trainings = loadFromStorage('training');
       const today = getDateStr();
 
@@ -3901,7 +3910,13 @@
 
     // 取某天的课表（原文优先）
     function getPlanForDate(date) {
-      const plan = loadFromStorage('plan');
+      const curWeek = getWeekDates(0)[0];
+      const hist = JSON.parse(localStorage.getItem('marathon_plan_history') || '{}');
+      let plan = hist[curWeek] || null;
+      if (!plan) {
+        const cur = loadFromStorage('plan');
+        if (cur && cur.days && (!cur.weekStart || cur.weekStart === curWeek)) plan = cur;
+      }
       if (!plan || !plan.days) return null;
       const idx = getWeekDates(0).indexOf(date);
       if (idx < 0) return null;
@@ -4099,6 +4114,12 @@
         weekPlan.template = '自定义计划';
       }
 
+      const choice = parseInt((document.getElementById('planWeekChoice') || {}).value || '0');
+      weekPlan.weekStart = getWeekDates(choice)[0];
+      // 课表按周存档：周报/记录按周取对应课表，互不覆盖
+      const hist = JSON.parse(localStorage.getItem('marathon_plan_history') || '{}');
+      hist[weekPlan.weekStart] = { days: weekPlan.days, daysRaw: weekPlan.daysRaw || null, template: weekPlan.template };
+      localStorage.setItem('marathon_plan_history', JSON.stringify(hist));
       saveToStorage('plan', weekPlan);
       closePlanModal();
       loadWeekPlan();
@@ -4241,7 +4262,9 @@
     function collectWeeklyData() {
       const dates = getWeekDates(weeklyOffset);
       const trainings = loadFromStorage('training');
-      const plan = loadFromStorage('plan');
+      const planHist = JSON.parse(localStorage.getItem('marathon_plan_history') || '{}');
+      const legacyPlan = loadFromStorage('plan');
+      const plan = planHist[dates[0]] || ((legacyPlan && legacyPlan.days && dates[0] === getWeekDates(0)[0]) ? legacyPlan : null);
       const decoupling = JSON.parse(localStorage.getItem('marathon_decoupling_records') || '[]');
       const dayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
       let totalKm = 0, strengthMin = 0, strengthCnt = 0;
