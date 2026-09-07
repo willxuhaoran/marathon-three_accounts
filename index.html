@@ -9,7 +9,7 @@
   <title>三本账 · 后半程不撞墙</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     :root {
@@ -4269,8 +4269,8 @@
       return entry;
     }
 
-    function exportWeeklyXlsx() {
-      if (typeof XLSX === 'undefined') { showToast('表格组件未加载，请检查网络后重试', 'error'); return; }
+    async function exportWeeklyXlsx() {
+      if (typeof XLSX === 'undefined') { showToast('表格组件未加载，请刷新后重试', 'error'); return; }
       const r = saveWeeklyReport(true);
       const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
       const aoa = [
@@ -4287,11 +4287,26 @@
       ws['!merges'] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
         { s: { r: rows.length + 3, c: 0 }, e: { r: rows.length + 3, c: 5 } },
-        { s: { r: rows.length + 4, c: 3 }, e: { r: rows.length + 4, c: 5 } }
+        { s: { r: rows.length + 4, c: 0 }, e: { r: rows.length + 4, c: 5 } },
+        { s: { r: rows.length + 5, c: 3 }, e: { r: rows.length + 5, c: 5 } }
       ];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, '周报');
-      XLSX.writeFile(wb, `三本账周报-${dates[0]}.xlsx`);
+      const fname = `三本账周报-${dates[0]}.xlsx`;
+      // 手机优先走系统分享（可存文件/发微信）；桌面直接下载
+      try {
+        const b64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const file = new File([arr], fname, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: fname });
+          showToast('已调起分享：可存到「文件」或直接发送', 'success');
+          return;
+        }
+      } catch (e) { console.error(e); }
+      XLSX.writeFile(wb, fname);
       showToast('已导出 xlsx', 'success');
     }
 
