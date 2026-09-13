@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.15.2</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.16.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2125,6 +2125,10 @@
 
         <div class="card" style="padding:18px;margin-bottom:16px">
           <h3 class="section-title">周级自评（教练模板）</h3>
+          <div class="form-group full">
+            <label class="form-label">周报标题（可改）</label>
+            <input type="text" class="form-input" id="weeklyTitle" placeholder="周训练情况反馈（日期范围）">
+          </div>
           <div class="form-group">
             <label class="form-label">疲劳程度 (1-5)</label>
             <div class="range-container">
@@ -4408,7 +4412,9 @@
           strength: strText,
           dist: t ? (t.distance || 0) : 0,
           dur: t ? (t.duration || 0) : 0,
-          hr: t ? (t.hr || null) : null
+          hr: t ? (t.hr || null) : null,
+          dateRaw: d,
+          completion: t ? (t.completion || '') : ''
         };
       });
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
@@ -4449,6 +4455,8 @@
       document.getElementById('weeklyFatigueValue').textContent = saved ? saved.fatigue : 3;
       document.getElementById('weeklyInjuryIdx').value = saved ? saved.injury : 1;
       document.getElementById('weeklyInjuryIdxValue').textContent = saved ? saved.injury : 1;
+      const titleEl = document.getElementById('weeklyTitle');
+      if (titleEl) titleEl.value = (saved && saved.title) ? saved.title : `周训练情况反馈（${dates[0]} 至 ${dates[6]}）`;
       document.getElementById('weeklyManagement').value = saved ? saved.management : '';
       document.getElementById('weeklySummary').value = saved ? saved.summary : '';
       // 本周还没保存过 → 自动起草两段文字（可手动改）
@@ -4464,6 +4472,7 @@
       const reports = JSON.parse(localStorage.getItem('marathon_weekly_reports') || '[]');
       const entry = {
         weekStart,
+        title: (document.getElementById('weeklyTitle') || {}).value || '',
         fatigue: parseFloat(document.getElementById('weeklyFatigue').value),
         injury: parseFloat(document.getElementById('weeklyInjuryIdx').value),
         management: document.getElementById('weeklyManagement').value.trim(),
@@ -4488,64 +4497,152 @@
       const { dates, rows, totalKm, strDays, strTypeMap } = collectWeeklyData();
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('周报');
-      ws.columns = [{ width: 13 }, { width: 18 }, { width: 40 }, { width: 36 }, { width: 20 }, { width: 42 }];
-      const thin = { style: 'thin', color: { argb: 'FFD8E0EA' } };
+      ws.columns = [{ width: 8 }, { width: 10.7 }, { width: 27.7 }, { width: 32 }, { width: 15.1 }, { width: 39.4 }];
+
+      const FONT = 'Microsoft YaHei';
+      const thin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
       const border = { top: thin, left: thin, bottom: thin, right: thin };
+      const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+      const typeFill = c => /力量/.test(c) ? 'FFD9D2E9' : /速度/.test(c) ? 'FFF8CBAD'
+        : /耐力/.test(c) ? 'FFC6E0B4' : /恢复/.test(c) ? 'FFBDD7EE' : /休息/.test(c) ? 'FFF2F2F2' : 'FFE7E6E6';
+      const fmtHMS = min => {
+        const t = Math.round((min || 0) * 60), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), ss = t % 60;
+        return h ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
+      };
+      const prettyPlan = raw => {
+        if (!raw) return '';
+        const items = splitPlanItems(raw);
+        let text = items.length ? items.join('\n') : raw;
+        return text.replace(/训练地点[:：]\s*/g, '\n📍').replace(/^\n/, '').trim();
+      };
+      const actualCell = x => {
+        const lines = [];
+        if (x.type === '力量训练') {
+          lines.push('力量训练' + (x.dur ? ` 用时 ${fmtHMS(x.dur)}` : '') + (x.hr ? `｜均心率 ${x.hr}` : ''));
+        } else if (x.dist) {
+          lines.push(`${x.type} ${x.dist} km`);
+          const parts = [];
+          if (x.dur) parts.push(`用时 ${fmtHMS(x.dur)}`);
+          if (x.dur) parts.push(`均配 ${secToPace(x.dur / x.dist * 60)}/km`);
+          if (x.hr) parts.push(`均心率 ${x.hr}`);
+          if (parts.length) lines.push(parts.join('｜'));
+        } else {
+          lines.push(x.actual === '—' ? '—' : x.actual);
+        }
+        if (x.completion) lines.push(`（${x.completion}）`);
+        return lines.join('\n');
+      };
+      const dayLabel = x => {
+        const [mm, dd] = x.dateRaw.slice(5).split('-');
+        return `${x.day.split(' ')[0]}\n${parseInt(mm)}月${parseInt(dd)}日`;
+      };
 
-      // 标题行
-      ws.mergeCells(1, 1, 1, 6);
-      const tc = ws.getCell(1, 1);
-      tc.value = `周训练情况反馈（${dates[0]} 至 ${dates[6]}）`;
-      tc.font = { bold: true, size: 15, color: { argb: 'FFFFFFFF' } };
-      tc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
-      tc.alignment = { horizontal: 'center', vertical: 'middle' };
-      ws.getRow(1).height = 34;
+      // 统计条数据
+      const runDays = rows.filter(x => x.dist > 0).length;
+      const maxDist = Math.max(0, ...rows.map(x => x.dist || 0));
+      const execX = rows.filter(x => x.completion && x.completion !== '未完成').length;
+      const execY = rows.filter(x => x.completion || x.plan).length || 7;
+      const titleRow = (document.getElementById('weeklyTitle') || {}).value
+        || `周训练情况反馈（${dates[0]} 至 ${dates[6]}）`;
 
-      // 表头（对照模板：实际完成不特指跑步；力量归入额外训练列）
-      const hr2 = ws.getRow(2);
-      hr2.values = ['日期', '训练类型', '训练计划内容', '实际完成情况', '额外训练', '训练感受'];
-      hr2.height = 24;
-      hr2.eachCell(c => {
-        c.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
-        c.alignment = { horizontal: 'center', vertical: 'middle' };
+      // ① 标题
+      ws.mergeCells('A1:F1');
+      const c1 = ws.getCell('A1');
+      c1.value = titleRow;
+      c1.font = { name: FONT, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+      c1.fill = fill('FF1F4E79');
+      c1.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      ws.getRow(1).height = 32;
+
+      // ② 统计条
+      ws.mergeCells('A2:F2');
+      const c2 = ws.getCell('A2');
+      c2.value = `📊 跑量约${totalKm.toFixed(1)}km（${runDays}天）｜力量${strDays}次｜课表执行 ${execX}/${execY}｜最长距离 ${Math.round(maxDist)}km｜疲劳${r.fatigue}/5 伤病${r.injury}/5`;
+      c2.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF1F4E79' } };
+      c2.fill = fill('FFDDEBF7');
+      c2.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      ws.getRow(2).height = 24;
+
+      // ③ 表头
+      const heads = ['日期', '训练类型', '训练计划内容', '实际完成情况', '额外训练', '训练感受与分析'];
+      const hr3 = ws.getRow(3);
+      hr3.values = heads;
+      hr3.height = 22;
+      heads.forEach((_, i) => {
+        const c = hr3.getCell(i + 1);
+        c.font = { name: FONT, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+        c.fill = fill('FF2E75B6');
+        c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         c.border = border;
       });
 
-      // 数据行：类型按课表口径（短名/细分/双课并列），实际完成按模板格式（km / 配速 / min）
-      rows.forEach((x, i) => {
-        const extraCell = x.strength || (x.extra !== '无' ? x.extra : '') || '无';
-        const row = ws.addRow([x.day, x.planCat || x.recordCat || '', x.plan, fmtActual(x), extraCell, x.notes]);
-        row.height = 56;
-        row.eachCell(c => { c.alignment = { vertical: 'top', wrapText: true }; c.border = border; c.font = { size: 10 }; });
-        row.getCell(1).font = { size: 10, bold: true };
-        row.getCell(2).font = { size: 10, bold: true, color: { argb: 'FF059669' } };
-        if (i % 2 === 1) row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F7FA' } }; });
+      // ④ 七天数据行
+      rows.forEach((x, idx) => {
+        const typeText = x.planCat || x.recordCat || '';
+        const extraText = x.strength || (x.extra !== '无' ? x.extra : '') || '无';
+        const vals = [dayLabel(x), typeText, prettyPlan(x.plan), actualCell(x), extraText, x.notes || ''];
+        const row = ws.addRow(vals);
+        const rowNo = idx + 4;
+        // 行高按内容估算
+        const est = Math.max(
+          Math.ceil((vals[2] || '').length / 18) + (vals[2] || '').split('\n').length,
+          Math.ceil((vals[3] || '').length / 22) + (vals[3] || '').split('\n').length,
+          Math.ceil((vals[4] || '').length / 12),
+          Math.ceil((vals[5] || '').length / 28)
+        );
+        row.height = Math.max(45, Math.min(100, est * 13 + 8));
+        for (let c = 1; c <= 6; c++) {
+          const cell = row.getCell(c);
+          cell.border = border;
+          cell.font = { name: FONT, size: 9, bold: c <= 2 };
+          if (c <= 2) cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+          else cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+          if (c === 1) cell.fill = fill('FFF2F7FB');
+          else if (c === 2) cell.fill = fill(typeFill(typeText));
+          else cell.fill = fill('FFF7F9FB');
+        }
       });
 
-      // 汇总区
-      const s0 = rows.length + 3;
+      // ⑤ 疲劳/伤病 + 管理
+      const row11 = rows.length + 4;
+      ws.mergeCells(`A${row11}:C${row11}`);
+      ws.mergeCells(`D${row11}:F${row11}`);
+      const a11 = ws.getCell(`A${row11}`);
+      a11.value = `疲劳程度：${r.fatigue}/5\n伤病指数：${r.injury}/5`;
+      a11.font = { name: FONT, size: 9, bold: true, color: { argb: 'FF9C5700' } };
+      a11.fill = fill('FFFFF2CC');
+      a11.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+      a11.border = border;
+      const d11 = ws.getCell(`D${row11}`);
+      d11.value = `伤病与疲劳管理：${r.management || '—'}`;
+      d11.font = { name: FONT, size: 9 };
+      d11.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      d11.border = border;
+      for (let c = 2; c <= 6; c++) ws.getCell(row11, c).border = border;
+      ws.getRow(row11).height = 45;
+
+      // ⑥ 本周总结
+      const row12 = row11 + 1;
+      ws.mergeCells(`A${row12}:B${row12}`);
+      ws.mergeCells(`D${row12}:F${row12}`);
+      const a12 = ws.getCell(`A${row12}`);
+      a12.value = '本周总结';
+      a12.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF375623' } };
+      a12.fill = fill('FFE2EFDA');
+      a12.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
       const typeDetail = Object.keys(strTypeMap).length
-        ? '｜' + Object.entries(strTypeMap).map(([k, v]) => `${k}×${v}`).join('，')
-        : '';
-      const summaryRows = [
-        [`疲劳程度：${r.fatigue}（1-5）`, `伤病指数：${r.injury}（1-5）`],
-        [`伤病与疲劳管理：${r.management || '—'}`],
-        ['本周总结', '', `本周跑量：约${totalKm.toFixed(0)}km ｜ 力量训练：${strDays}天（次）${typeDetail}`, r.summary || '']
-      ];
-      summaryRows.forEach((vals, i) => {
-        const row = ws.addRow(vals);
-        row.eachCell(c => {
-          c.border = border;
-          c.alignment = { vertical: 'middle', wrapText: true };
-          c.font = { size: 10.5 };
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i === 0 ? 'FFFFF7ED' : 'FFF0FDF4' } };
-        });
-        row.height = (i === 1 || i === 2) ? 42 : 24;
-      });
-      ws.mergeCells(s0 + 1, 1, s0 + 1, 6);
-      ws.mergeCells(s0 + 2, 4, s0 + 2, 6);
-      ws.getCell(s0 + 2, 1).font = { bold: true, size: 10.5 };
+        ? `（${Object.entries(strTypeMap).map(([k, v]) => `${k}×${v}`).join('，')}）` : '';
+      const c12 = ws.getCell(`C${row12}`);
+      c12.value = `本周跑量：约${totalKm.toFixed(1)}km\n力量训练：${strDays}次${typeDetail}`;
+      c12.font = { name: FONT, size: 9, bold: true, color: { argb: 'FF375623' } };
+      c12.fill = fill('FFE2EFDA');
+      c12.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+      const d12 = ws.getCell(`D${row12}`);
+      d12.value = r.summary || '';
+      d12.font = { name: FONT, size: 9 };
+      d12.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+      for (let c = 1; c <= 6; c++) ws.getCell(row12, c).border = border;
+      ws.getRow(row12).height = 86;
 
       // 写出 + 手机分享 / 桌面下载
       const fname = `三本账周报-${dates[0]}.xlsx`;
