@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.19.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.20.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2172,6 +2172,7 @@
             <button class="dc-btn" onclick="saveWeeklyReport()">保存周报</button>
             <button class="dc-btn" style="background:var(--primary);font-size:12px" onclick="syncIntervalsWeek()">🔄 同步本周手表数据</button>
             <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px" onclick="redraftWeekly()">🪄 重新生成草稿</button>
+            <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px" onclick="clearWeekAll()">🧹 清除本周手改</button>
             <button class="dc-btn" style="background:var(--accent)" onclick="exportWeeklyXlsx()">导出 xlsx</button>
             <button class="dc-btn" style="background:var(--secondary)" onclick="copyWeeklyText()">复制文本发群</button>
           </div>
@@ -4798,7 +4799,9 @@
         if (dc) lines.push(`解耦漂移 ${dc.drift}%`);
         if (planHasStr && strPart) lines.push(strPart);
         const actualCell = lines.join('\n') || '—';
-        const actual = (weekOverrides()[d] || {}).actual !== undefined ? weekOverrides()[d].actual : actualCell;
+        const ovD = weekOverrides()[d] || {};
+        const actual = ovValue(ovD.actual) !== undefined ? ovValue(ovD.actual) : actualCell;
+        const autoVals = { plan: planRaw, actual: actualCell, extra: extraCell, notes: notesJoin };
         // 额外训练 = 课表之外的安排（课表外力量、额外跑量、其他内容）；不含热身冷身
         const exBits = [];
         if (!planHasStr && strPart) exBits.push(strPart);
@@ -4813,12 +4816,12 @@
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
           type: firstType,
           recs: dayRecs,
-          plan: (weekOverrides()[d] || {}).plan !== undefined ? weekOverrides()[d].plan : planRaw,
+          plan: ovValue(ovD.plan) !== undefined ? ovValue(ovD.plan) : planRaw,
           actual,
-          actualCell: (weekOverrides()[d] || {}).actual !== undefined ? weekOverrides()[d].actual : actualCell,
-          extraCell: (weekOverrides()[d] || {}).extra !== undefined ? weekOverrides()[d].extra : extraCell,
+          actualCell: ovValue(ovD.actual) !== undefined ? ovValue(ovD.actual) : actualCell,
+          extraCell: ovValue(ovD.extra) !== undefined ? ovValue(ovD.extra) : extraCell,
           extra: dayRecs.map(t => t.extra).filter(Boolean).join('；') || '无',
-          notes: (weekOverrides()[d] || {}).notes !== undefined ? weekOverrides()[d].notes : notesJoin,
+          notes: ovValue(ovD.notes) !== undefined ? ovValue(ovD.notes) : notesJoin,
           planCat,
           recordCat: dayRecs.length ? dayRecs.map(t => recordCategoryShort(t)).join('＋') : '',
           strength: strPart,
@@ -4828,6 +4831,7 @@
           warmupKm: totWarm,
           extraRunKm: totExtraRun,
           planHasStr,
+          autoVals,
           dateRaw: d,
           completion: dayRecs.map(t => t.completion).filter(Boolean)[0] || ''
         };
@@ -4838,6 +4842,27 @@
     // —— 周报单元格编辑（计划/实际/额外/感受 都可改；改动存为覆盖值，可恢复自动） ——
     function weekOverrides() {
       try { return JSON.parse(localStorage.getItem('marathon_week_overrides') || '{}'); } catch (e) { return {}; }
+    }
+    function ovValue(ov) { return ov === undefined ? undefined : (typeof ov === 'string' ? ov : ov.v); }
+    function ovIsStale(x, field, ov) {
+      if (ov === undefined || typeof ov === 'string') return false;
+      const cur = (x.autoVals || {})[field];
+      return ov.base !== undefined && cur !== undefined && ov.base !== cur;
+    }
+    // 从"实际完成"文本里解析数字，回写训练记录
+    function parseActualText(text) {
+      const out = {};
+      const km = text.match(/(\d+(?:\.\d+)?)\s*km/i);
+      if (km) out.distance = parseFloat(km[1]);
+      let dur = text.match(/用时\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/) || text.match(/(\d{1,3})\s*min/i);
+      if (dur) {
+        if (dur[3]) out.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]) + Math.round(parseInt(dur[3]) / 60);
+        else if (dur[2]) out.duration = parseInt(dur[1]) * 60 + parseInt(dur[2]);
+        else out.duration = parseInt(dur[1]);
+      }
+      const hr = text.match(/均心率\s*(\d{2,3})/);
+      if (hr) out.hr = parseInt(hr[1]);
+      return out;
     }
     function startEditWeekCell(date, field) {
       weeklyEditing = { date, field };
@@ -4852,10 +4877,33 @@
     function saveWeekCell(date, field) {
       const ta = document.getElementById('wkCellEdit');
       const text = ta ? ta.value.trim() : '';
+      // 记录当前系统自动值作为 base（之后系统数据变化即可提示过期）
+      const w = collectWeeklyData();
+      const rowObj = w.rows.find(r => r.dateRaw === date);
+      const base = rowObj && rowObj.autoVals ? rowObj.autoVals[field] : undefined;
       const all = weekOverrides();
       all[date] = all[date] || {};
-      all[date][field] = text;
+      all[date][field] = { v: text, base };
       localStorage.setItem('marathon_week_overrides', JSON.stringify(all));
+      // 实际完成：解析数字回写训练记录，让总量/勾选重算
+      if (field === 'actual') {
+        const nums = parseActualText(text);
+        if (Object.keys(nums).length) {
+          const trainings = loadFromStorage('training');
+          const dayRecs = trainings.filter(t => t.date === date);
+          if (dayRecs.length) {
+            const rec = dayRecs[0];
+            if (nums.distance !== undefined) rec.distance = nums.distance;
+            if (nums.duration !== undefined) rec.duration = nums.duration;
+            if (nums.hr !== undefined) rec.hr = nums.hr;
+            rec.pace = (rec.duration && rec.distance) ? (rec.duration / rec.distance).toFixed(2) : rec.pace;
+            saveToStorage('training', trainings);
+            loadTodayData(getRecordDate());
+            loadWeekPlan();
+            showToast(`已同步到记录：${nums.distance !== undefined ? nums.distance + 'km ' : ''}${nums.duration !== undefined ? nums.duration + 'min ' : ''}${nums.hr !== undefined ? '均心率' + nums.hr : ''}`.trim(), 'success');
+          }
+        }
+      }
       // 感受：当天只有一条记录时同步回记录页
       if (field === 'notes') {
         const trainings = loadFromStorage('training');
@@ -4869,6 +4917,16 @@
       weeklyEditing = null;
       renderWeekly(weeklyOffset);
       showToast('已保存', 'success');
+    }
+    function clearWeekAll() {
+      if (!confirm('清除本周全部手动修改，恢复系统自动生成？')) return;
+      const dates = getWeekDates(weeklyOffset);
+      const all = weekOverrides();
+      dates.forEach(d => delete all[d]);
+      localStorage.setItem('marathon_week_overrides', JSON.stringify(all));
+      weeklyEditing = null;
+      renderWeekly(weeklyOffset);
+      showToast('本周手改已全部清除', 'success');
     }
     function clearWeekOverride(date, field) {
       const all = weekOverrides();
@@ -4890,10 +4948,13 @@
           <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
             <button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();saveWeekCell('${x.dateRaw}','${field}')">保存</button>
             <button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="event.stopPropagation();cancelEditWeekCell()">取消</button>
-            ${ov !== undefined ? `<button class="dc-btn" style="background:rgba(255,107,53,.2);color:#FFB08A;font-size:11px;padding:4px 10px" onclick="event.stopPropagation();clearWeekOverride('${x.dateRaw}','${field}')">恢复自动</button>` : ''}
+            ${ov !== undefined ? `<button class="dc-btn" style="background:${stale ? 'var(--accent)' : 'rgba(255,107,53,.2)'};${stale ? '' : 'color:#FFB08A;'}font-size:11px;padding:4px 10px" onclick="event.stopPropagation();clearWeekOverride('${x.dateRaw}','${field}')">${stale ? '⟳ 用最新数据替换' : '恢复自动'}</button>` : ''}
           </div></td>`;
       }
-      const mark = ov !== undefined ? ' <span style="color:var(--secondary);font-size:10px">✎</span>' : '';
+      const stale = ovIsStale(x, field, ov);
+      const mark = ov === undefined ? ''
+        : (stale ? ' <span style="color:var(--accent);font-size:11px" title="系统数据已更新，点开可替换">⟳</span>'
+                 : ' <span style="color:var(--secondary);font-size:10px" title="已手动修改">✎</span>');
       const body = htmlText || '<span style="color:var(--surface-lighter)">点击编辑…</span>';
       return `<td style="cursor:pointer;min-width:140px" onclick="startEditWeekCell('${x.dateRaw}','${field}')" title="点击编辑">${body}${mark}</td>`;
     }
