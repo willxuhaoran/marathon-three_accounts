@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.18.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.19.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2133,7 +2133,7 @@
         <div class="card" style="padding:18px;margin-bottom:16px;overflow-x:auto">
           <h3 class="section-title">计划 vs 实际（自动生成）</h3>
           <table class="wk-table">
-            <thead><tr><th>日期</th><th>计划内容</th><th>实际完成</th><th>额外</th><th>感受/备注</th></tr></thead>
+            <thead><tr><th>日期</th><th>计划内容</th><th>实际完成</th><th>额外</th><th>训练感受 <span style="font-weight:400;font-size:11px">(点击可编辑)</span></th></tr></thead>
             <tbody id="weeklyTbody"></tbody>
           </table>
           <div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)" id="weeklyInjuries"></div>
@@ -2408,6 +2408,7 @@
     let selectedWater = 0;
     let charts = {};
     let editingRecordId = null; // 正在编辑的训练记录 id（null = 新增一条）
+    let weeklyEditingNote = null; // 周报中正在编辑感受的日期
     let selectedTemplate = null;
 
     // Initialize
@@ -4286,7 +4287,7 @@
     function exportAllData() {
       const keys = ['marathon_training_records', 'marathon_injury_records', 'marathon_recovery_records',
         'marathon_mental_records', 'marathon_diet_records', 'marathon_body_records', 'marathon_goals',
-        'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done'];
+        'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done', 'marathon_day_notes'];
       const data = {};
       keys.forEach(k => { const v = localStorage.getItem(k); if (v) { try { data[k] = JSON.parse(v); } catch (e) { data[k] = v; } } });
       const json = JSON.stringify({ app: '三本账', version: 'v1.13.1', exportedAt: new Date().toISOString(), data }, null, 1);
@@ -4761,7 +4762,10 @@
         const totExtraRun = dayRecs.reduce((s, t) => s + (t.extraRunKm || 0), 0);
         const hrRecs = dayRecs.filter(t => t.hr);
         const hrAvg = hrRecs.length ? Math.round(hrRecs.reduce((s, t) => s + t.hr, 0) / hrRecs.length) : null;
-        const notesJoin = dayRecs.map(t => t.notes).filter(Boolean).join('\n');
+        const dayNotesAll = JSON.parse(localStorage.getItem('marathon_day_notes') || '{}');
+        const notesJoin = dayRecs.length === 1
+          ? (dayRecs[0].notes || '')
+          : (dayNotesAll[d] || dayRecs.map(t => t.notes).filter(Boolean).join('\n'));
         // 力量：按天计次 + 内容细分（一天多条力量也只算一次）
         const strParts = [];
         const kindsToday = new Set();
@@ -4831,6 +4835,37 @@
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
     }
 
+    function startEditWeekNote(date) {
+      weeklyEditingNote = date;
+      renderWeekly(weeklyOffset);
+      const ta = document.getElementById('wkNoteEdit');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+    function cancelEditWeekNote() {
+      weeklyEditingNote = null;
+      renderWeekly(weeklyOffset);
+    }
+    function saveWeekNote(date) {
+      const ta = document.getElementById('wkNoteEdit');
+      const text = ta ? ta.value.trim() : '';
+      const trainings = loadFromStorage('training');
+      const dayRecs = trainings.filter(t => t.date === date);
+      if (dayRecs.length === 1) {
+        // 单条记录：直接改那条记录的备注（与记录页同步）
+        dayRecs[0].notes = text;
+        saveToStorage('training', trainings);
+      } else {
+        // 多条记录或无记录：存为"当天感受"
+        const all = JSON.parse(localStorage.getItem('marathon_day_notes') || '{}');
+        all[date] = text;
+        localStorage.setItem('marathon_day_notes', JSON.stringify(all));
+      }
+      weeklyEditingNote = null;
+      renderWeekly(weeklyOffset);
+      loadTodayData(getRecordDate());
+      showToast('感受已保存', 'success');
+    }
+
     function renderWeekly(offset = 0) {
       weeklyOffset = offset;
       const { dates, rows, totalKm, strengthMin, strDays } = collectWeeklyData();
@@ -4847,7 +4882,15 @@
           <td class="wk-plan">${x.plan || '—'}</td>
           <td>${(x.actualCell || x.actual).replace(/\n/g, '<br>')}</td>
           <td>${x.extraCell || x.extra}</td>
-          <td class="wk-note">${x.notes || '—'}</td>
+          <td class="wk-note" style="cursor:pointer;min-width:160px" onclick="startEditWeekNote('${x.dateRaw}')" title="点击编辑感受">
+            ${weeklyEditingNote === x.dateRaw
+              ? `<textarea id="wkNoteEdit" class="form-input" rows="4" onclick="event.stopPropagation()" placeholder="写点感受…">${(x.notes || '').replace(/</g, '&lt;')}</textarea>
+                 <div style="margin-top:6px;display:flex;gap:6px">
+                   <button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();saveWeekNote('${x.dateRaw}')">保存</button>
+                   <button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="event.stopPropagation();cancelEditWeekNote()">取消</button>
+                 </div>`
+              : (x.notes ? x.notes.replace(/\n/g, '<br>') : '<span style="color:var(--surface-lighter)">点击添加感受…</span>')}
+          </td>
         </tr>`).join('');
 
       const wkInj = injuries.filter(x => dates.includes(x.date));
