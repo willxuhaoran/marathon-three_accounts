@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.17.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.18.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1690,6 +1690,12 @@
               <div id="dayPlanText" style="font-size:12.5px;line-height:1.7;margin-top:6px"></div>
               <div id="dayPlanTip" style="color:var(--text-secondary);font-size:12px;margin-top:6px;line-height:1.6"></div>
             </div>
+            <!-- 当日训练记录列表（一天可多条） -->
+            <div style="margin:-6px 0 14px;padding:12px 14px;background:var(--surface);border:1px solid var(--surface-lighter);border-radius:10px">
+              <div style="font-size:12.5px;font-weight:700;margin-bottom:4px">📋 当日训练记录</div>
+              <div id="dayRecordsList"></div>
+            </div>
+            <div id="editBanner" style="display:none;margin:-6px 0 14px;padding:10px 12px;background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.45);border-radius:10px;font-size:12.5px"></div>
             <!-- 识别结果（系统自动生成，只读） -->
             <div id="autoResult" style="margin:-6px 0 14px;padding:12px 14px;background:rgba(0,210,106,.06);border:1px solid rgba(0,210,106,.3);border-radius:10px">
               <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">🤖 系统识别结果（自动生成 · 点 chip 可手动修改）</div>
@@ -2401,6 +2407,7 @@
     let currentFilter = 'all';
     let selectedWater = 0;
     let charts = {};
+    let editingRecordId = null; // 正在编辑的训练记录 id（null = 新增一条）
     let selectedTemplate = null;
 
     // Initialize
@@ -2585,9 +2592,14 @@
         };
 
         let trainings = loadFromStorage('training');
-        const existingIndex = trainings.findIndex(t => t.date === today);
-        if (existingIndex >= 0) {
-          trainings[existingIndex] = training;
+        // 一天可多条记录：编辑模式按 id 更新，否则追加为新的一条（节奏+间歇、早跑+晚跑等）
+        if (editingRecordId) {
+          const idx = trainings.findIndex(t => t.id === editingRecordId);
+          if (idx >= 0) { training.id = editingRecordId; trainings[idx] = training; }
+          else trainings.push(training);
+          editingRecordId = null;
+          const eb = document.getElementById('editBanner');
+          if (eb) eb.style.display = 'none';
         } else {
           trainings.push(training);
         }
@@ -2773,15 +2785,27 @@
       const titleEl = document.getElementById('summaryTitleText');
       if (titleEl) titleEl.textContent = isToday ? '今日训练' : `${today.slice(5).replace('-', '月')}日 训练（补记）`;
       const trainings = loadFromStorage('training');
-      const todayTraining = trainings.find(t => t.date === today);
+      const dayList = trainings.filter(t => t.date === today);
+      const todayTraining = dayList.length
+        ? Object.assign({}, dayList[0], {
+            distance: dayList.reduce((s, t) => s + (t.distance || 0), 0),
+            duration: dayList.reduce((s, t) => s + (t.duration || 0), 0),
+            hr: dayList.filter(t => t.hr).length ? Math.round(dayList.filter(t => t.hr).reduce((s, t) => s + t.hr, 0) / dayList.filter(t => t.hr).length) : null,
+            type: dayList.map(t => t.type).join('＋'),
+            _multi: dayList.length > 1
+          })
+        : null;
+      if (todayTraining && todayTraining.distance && todayTraining.duration) {
+        todayTraining.pace = (todayTraining.duration / todayTraining.distance).toFixed(2);
+      }
 
       if (todayTraining) {
-        document.getElementById('todayDistance').textContent = todayTraining.distance;
+        document.getElementById('todayDistance').textContent = Math.round(todayTraining.distance * 100) / 100;
         document.getElementById('todayPace').textContent = todayTraining.pace || '--';
         document.getElementById('todayDuration').textContent = todayTraining.duration;
         document.getElementById('todayType').innerHTML = `
           <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
-          ${todayTraining.type}
+          ${todayTraining.type}${todayTraining._multi ? `（${dayList.length}条）` : ''}
         `;
       } else {
         document.getElementById('todayDistance').textContent = '0';
@@ -2802,21 +2826,27 @@
       const todayBody = bodies.find(b => b.date === today);
       document.getElementById('todayWeight').textContent = todayBody ? (todayBody.weight || '-') : '-';
 
-      // 今日总览：汇总当天所有填写内容
+      // 今日总览：汇总当天所有填写内容（支持多条训练记录）
       const digest = [];
-      if (todayTraining) {
-        let line = `${todayTraining.type || '训练'} ${todayTraining.distance || 0}km`;
-        if (todayTraining.duration) line += ` ${fmtDur(todayTraining.duration)}`;
-        if (todayTraining.hr) line += ` 均心率${todayTraining.hr}`;
-        if (todayTraining.completion) line += `（${todayTraining.completion}）`;
-        if (todayTraining.extra) line += ` ＋${todayTraining.extra}`;
-        digest.push('🏃 ' + line);
+      if (dayList.length) {
+        const totKm = dayList.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
+        const totMin = dayList.reduce((s, t) => s + (t.duration || 0), 0);
+        digest.push(`🏃 今日合计 ${Math.round(totKm * 100) / 100}km · ${fmtDur(totMin) || '—'}（${dayList.length} 条）`);
+        dayList.forEach(t => {
+          let line = `　· ${t.type || '训练'} ${t.distance || 0}km`;
+          if (t.duration) line += ` ${fmtDur(t.duration)}`;
+          if (t.hr) line += ` 均心率${t.hr}`;
+          if (t.warmupKm) line += ` ＋热身冷身${t.warmupKm}km`;
+          if (t.extraRunKm) line += ` ＋额外跑${t.extraRunKm}km`;
+          if (t.completion && t.completion !== '按计划完成') line += `（${t.completion}）`;
+          digest.push(line);
+        });
+        const strList = dayList.filter(t => t.strengthDuration);
+        if (strList.length) {
+          const sh = strList.find(t => t.strengthHr);
+          digest.push(`💪 力量 ${strList.reduce((s, t) => s + t.strengthDuration, 0)}min` + (sh ? ` 均心率${sh.strengthHr}` : ''));
+        }
       }
-      if (todayTraining && todayTraining.strengthDuration) {
-        digest.push(`💪 力量 ${todayTraining.strengthDuration}min` + (todayTraining.strengthHr ? ` 均心率${todayTraining.strengthHr}` : ''));
-      }
-      if (todayTraining && todayTraining.warmupKm) digest.push(`🏃 热身/冷身 ${todayTraining.warmupKm}km（计入跑量）`);
-      if (todayTraining && todayTraining.extraRunKm) digest.push(`➕ 额外跑量 ${todayTraining.extraRunKm}km（计入跑量）`);
       const planInfo2 = getPlanForDate(today);
       if (planInfo2) {
         const items = splitPlanItems(planInfo2.raw);
@@ -3029,10 +3059,16 @@
       let records = loadFromStorage(type);
       records = records.filter(r => r.id !== id);
       saveToStorage(type, records);
+      if (editingRecordId === id) {
+        editingRecordId = null;
+        const eb = document.getElementById('editBanner');
+        if (eb) eb.style.display = 'none';
+      }
       showToast('删除成功', 'success');
       loadRecords();
       loadTodayData();
       loadWeekPlan();
+      renderDayRecords(getRecordDate());
     }
 
     // Analysis Tab
@@ -3343,7 +3379,8 @@
       container.innerHTML = weekDates.map((date, index) => {
         const dayPlan = weekPlan.days[index] || '';
         const rawPlan = (weekPlan.daysRaw && weekPlan.daysRaw[index]) || '';
-        const training = trainings.find(t => t.date === date);
+        const dayRecs0 = trainings.filter(t => t.date === date);
+        const training = dayRecs0.length ? Object.assign({}, dayRecs0[0], { distance: dayRecs0.reduce((s2, t2) => s2 + (t2.distance || 0), 0), duration: dayRecs0.reduce((s2, t2) => s2 + (t2.duration || 0), 0) }) : undefined;
         const isToday = date === today;
         const isPast = new Date(date) < new Date(today);
 
@@ -3430,7 +3467,8 @@
       document.getElementById('planCompleted').textContent = completedCount;
       document.getElementById('planRemaining').textContent = weekDates.filter((d, i) => {
         const plan = weekPlan.days[i];
-        const training = trainings.find(t => t.date === d);
+        const dayRecs1 = trainings.filter(t => t.date === d);
+        const training = dayRecs1.length ? Object.assign({}, dayRecs1[0], { distance: dayRecs1.reduce((s2, t2) => s2 + (t2.distance || 0), 0), duration: dayRecs1.reduce((s2, t2) => s2 + (t2.duration || 0), 0) }) : undefined;
         return plan && plan !== '休息' && (!training || training.distance === 0);
       }).length;
     }
@@ -4023,16 +4061,17 @@
       const items = splitPlanItems(p.raw);
       const all = planDoneMap();
       const doneMap = all[date] || {};
-      const rec = loadFromStorage('training').find(x => x.date === date);
-      if (rec && rec.type) {
+      const dayRecs = loadFromStorage('training').filter(x => x.date === date);
+      if (dayRecs.length) {
         let changed = false;
         items.forEach((it, i) => {
           if (doneMap[i] !== undefined) return;
           const isRunItem = /跑|配速|\d+\s*[kK㎞]/i.test(it);
           const isStrItem = /力量|核心|技术|hyrox/i.test(it);
-          if ((['长跑', 'E跑', '间歇跑', '节奏跑'].includes(rec.type) && isRunItem) ||
-              (rec.type === '力量训练' && isStrItem) ||
-              ((/力量|核心|hyrox/i.test(rec.extra || '') || (rec.strengthDuration || 0) > 0) && isStrItem)) { doneMap[i] = true; changed = true; }
+          const runHit = dayRecs.some(rec => ['长跑', 'E跑', '间歇跑', '节奏跑'].includes(rec.type) && isRunItem);
+          const strHit = dayRecs.some(rec => (rec.type === '力量训练' && isStrItem) ||
+            ((/力量|核心|hyrox/i.test(rec.extra || '') || (rec.strengthDuration || 0) > 0) && isStrItem));
+          if (runHit || strHit) { doneMap[i] = true; changed = true; }
         });
         if (changed) { all[date] = doneMap; localStorage.setItem('marathon_plan_done', JSON.stringify(all)); }
       }
@@ -4064,32 +4103,77 @@
     }
 
     function fillTrainingForm(date) {
-      const t = loadFromStorage('training').find(x => x.date === date);
+      // 新增一条记录：不再回填旧记录（编辑请点列表里的「编辑」）
       const set = (id, v) => { document.getElementById(id).value = v; };
-      if (t) {
-        set('trainingType', t.type || '');
-        set('trainingDistance', t.distance || '');
-        set('trainingDuration', t.duration || '');
-        set('trainingRpe', t.rpe || 3);
-        document.getElementById('rpeValue').textContent = t.rpe || 3;
-        set('trainingHr', t.hr || '');
-        set('trainingCompletion', t.completion || '按计划完成');
-        set('trainingExtra', t.extra || '');
-        set('strengthDuration', t.strengthDuration || '');
-        set('strengthHr', t.strengthHr || '');
-        set('warmupKm', t.warmupKm || '');
-        set('extraRunKm', t.extraRunKm || '');
-        set('trainingWeather', t.weather || '');
-        set('trainingNotes', t.notes || '');
-      } else {
-        ['trainingType', 'trainingDistance', 'trainingDuration', 'trainingHr', 'trainingExtra', 'trainingWeather', 'trainingNotes']
-          .forEach(id => set(id, ''));
+      if (!editingRecordId) {
+        ['trainingType', 'trainingDistance', 'trainingDuration', 'trainingHr', 'trainingExtra', 'trainingWeather', 'trainingNotes',
+         'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm'].forEach(id => set(id, ''));
         set('trainingRpe', 3);
         document.getElementById('rpeValue').textContent = '3';
         set('trainingCompletion', '按计划完成');
       }
       renderTypeTip.call(document.getElementById('trainingType'));
       renderAutoSummary();
+      renderDayRecords(date);
+    }
+
+    // 当天已保存的训练记录列表（可编辑/删除；一天可多条）
+    function renderDayRecords(date) {
+      const box = document.getElementById('dayRecordsList');
+      if (!box) return;
+      const list = loadFromStorage('training').filter(t => t.date === date);
+      if (!list.length) { box.innerHTML = '<div style="font-size:12.5px;color:var(--text-secondary)">这一天还没有训练记录</div>'; return; }
+      const totKm = list.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--primary);margin-bottom:6px">合计 ${Math.round(totKm * 100) / 100} km · ${list.reduce((s, t) => s + (t.duration || 0), 0)} min（${list.length} 条）</div>`
+        + list.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface-light);border-radius:8px;margin-top:6px">
+            <div style="font-size:12.5px;line-height:1.5">
+              <b>${t.type || '训练'}</b> ${t.distance || 0}km ${t.duration || 0}min${t.hr ? ` 均心率${t.hr}` : ''}
+              ${t.strengthDuration ? `<br>💪 力量 ${t.strengthDuration}min` : ''}
+              ${t.extraRunKm ? `<br>➕ 额外跑 ${t.extraRunKm}km` : ''}
+              ${t.warmupKm ? `<br>热身冷身 ${t.warmupKm}km` : ''}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="dc-btn" style="background:var(--surface-lighter);font-size:11px;padding:5px 10px" onclick="startEditRecord('${t.id}')">编辑</button>
+              <button class="dc-btn" style="background:rgba(239,68,68,.2);color:#FCA5A5;font-size:11px;padding:5px 10px" onclick="deleteRecord('training','${t.id}')">删</button>
+            </div>
+          </div>`).join('');
+    }
+
+    function startEditRecord(id) {
+      const t = loadFromStorage('training').find(x => x.id === id);
+      if (!t) return;
+      editingRecordId = id;
+      const set = (k, v) => { document.getElementById(k).value = v; };
+      set('trainingType', t.type === '未分类' ? '' : (t.type || ''));
+      set('trainingDistance', t.distance || '');
+      set('trainingDuration', t.duration || '');
+      set('trainingHr', t.hr || '');
+      set('trainingRpe', t.rpe || 3);
+      document.getElementById('rpeValue').textContent = t.rpe || 3;
+      set('trainingCompletion', t.completion || '按计划完成');
+      set('trainingExtra', t.extra || '');
+      set('strengthDuration', t.strengthDuration || '');
+      set('strengthHr', t.strengthHr || '');
+      set('warmupKm', t.warmupKm || '');
+      set('extraRunKm', t.extraRunKm || '');
+      set('trainingWeather', t.weather || '');
+      set('trainingNotes', t.notes || '');
+      if (t.date && t.date !== getRecordDate()) setRecordDate(t.date);
+      const eb = document.getElementById('editBanner');
+      if (eb) {
+        eb.style.display = 'block';
+        eb.innerHTML = `✏️ 正在编辑「${t.type || '训练'} ${t.distance || 0}km」——保存将更新这条记录　<button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="cancelEditRecord()">取消编辑</button>`;
+      }
+      renderAutoSummary();
+      showToast('已载入这条记录，改完点保存', 'success');
+    }
+
+    function cancelEditRecord() {
+      editingRecordId = null;
+      const eb = document.getElementById('editBanner');
+      if (eb) eb.style.display = 'none';
+      fillTrainingForm(getRecordDate());
     }
 
     // 从计划文本识别全部类型（按出现顺序，双课日返回多个）
@@ -4398,39 +4482,36 @@
         (byDate[d] = byDate[d] || []).push(a);
       });
       const trainings = loadFromStorage('training');
-      let added = 0, filled = 0;
+      let added = 0, skipped = 0;
       Object.keys(byDate).forEach(d => {
         const list = byDate[d].slice().sort((x, y) => (y.distance || 0) - (x.distance || 0));
-        const main = intervalsToRecord(list[0]);
-        const strAct = list.find(x => intervalsTypeOf(x) === '力量训练');
-        const idx = trainings.findIndex(x => x.date === d);
-        if (idx < 0) {
-          const rec = {
-            id: generateId(), date: d, type: main.type, distance: main.distance || 0,
-            duration: main.duration || 0,
-            pace: main.distance && main.duration ? (main.duration / main.distance).toFixed(2) : 0,
-            rpe: 3, hr: main.hr || null, completion: '按计划完成', extra: '',
-            strengthDuration: 0, strengthHr: null, weather: '', notes: main.narrative || ''
-          };
-          if (strAct) { const s = intervalsToRecord(strAct); rec.strengthDuration = s.duration || 0; rec.strengthHr = s.hr || null; rec.extra = s.type; }
-          trainings.push(rec); added++;
-        } else {
-          const cur = trainings[idx];
-          let ch = false;
-          if (!cur.hr && main.hr) { cur.hr = main.hr; ch = true; }
-          if (!cur.distance && main.distance) { cur.distance = main.distance; ch = true; }
-          if (!cur.duration && main.duration) { cur.duration = main.duration; ch = true; }
-          if (cur.distance && cur.duration) cur.pace = (cur.duration / cur.distance).toFixed(2);
-          if (!cur.notes && main.narrative) { cur.notes = main.narrative; ch = true; }
-          if (strAct && !cur.strengthDuration) { const s = intervalsToRecord(strAct); cur.strengthDuration = s.duration || 0; cur.strengthHr = s.hr || null; if (!cur.extra) cur.extra = s.type; ch = true; }
-          if (ch) filled++;
-        }
+        list.forEach(a => {
+          const r = intervalsToRecord(a);
+          const isStr = r.type === '力量训练';
+          // 去重：同一天已有近似记录则跳过
+          const dup = trainings.some(t => t.date === d &&
+            Math.abs((t.distance || 0) - (r.distance || 0)) < 0.2 &&
+            Math.abs((t.duration || 0) - (r.duration || 0)) < 2);
+          if (dup) { skipped++; return; }
+          trainings.push({
+            id: generateId(), date: d, type: r.type,
+            distance: isStr ? 0 : (r.distance || 0),
+            duration: r.duration || 0,
+            pace: (!isStr && r.distance && r.duration) ? (r.duration / r.distance).toFixed(2) : 0,
+            rpe: 3, hr: r.hr || null, completion: '按计划完成',
+            extra: isStr ? (a.name || '力量训练') : '',
+            strengthDuration: isStr ? (r.duration || 0) : 0,
+            strengthHr: isStr ? (r.hr || null) : null,
+            warmupKm: 0, extraRunKm: 0, weather: '', notes: r.narrative || ''
+          });
+          added++;
+        });
       });
       saveToStorage('training', trainings);
       renderWeekly(weeklyOffset);
       loadTodayData(getRecordDate());
       loadWeekPlan();
-      showToast(`同步完成：新增 ${added} 天，补全 ${filled} 天`, 'success');
+      showToast(`同步完成：新增 ${added} 条记录${skipped ? `，跳过重复 ${skipped} 条` : ''}`, 'success');
     }
 
     // —— FIT / TCX / GPX 文件导入 ——
@@ -4585,7 +4666,7 @@
       const runs = trainings.filter(t => ['长跑', 'E跑', '间歇跑', '节奏跑'].includes(t.type));
       const totalKm = runs.reduce((s, t) => s + (t.distance || 0), 0);
       const strengthMin = trainings.reduce((s, t) => s + ((t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0)), 0);
-      const strengthCnt = trainings.filter(t => (t.strengthDuration || 0) > 0 || t.type === '力量训练').length;
+      const strengthCnt = new Set(trainings.filter(t => (t.strengthDuration || 0) > 0 || t.type === '力量训练').map(t => t.date)).size;
       const prevKm = loadFromStorage('training').filter(x => getWeekDates(weeklyOffset - 1).includes(x.date))
         .reduce((s, t) => s + (t.distance || 0), 0);
 
@@ -4668,64 +4749,83 @@
       const strDaySet = new Set();
       const strTypeMap = {};
       const rows = dates.map((d, i) => {
-        const t = trainings.find(x => x.date === d);
-        if (t) totalKm += (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0);
+        const dayRecs = trainings.filter(x => x.date === d);
+        if (dayRecs.length) totalKm += dayRecs.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
         const dc = decoupling.find(x => x.date === d);
         const planRaw = (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '';
         const planCat = planRaw ? planCategoryShort(planRaw) : '';
         const planHasStr = /力量|技术/.test(planCat);
-        let actual = '—';
-        let strText = '';
-        let strPart = '';
-        if (t) {
-          actual = `${t.type} ${t.distance || 0}km ${t.duration || 0}min` + (t.hr ? ` 均心率${t.hr}bpm` : '');
-          if (t.completion) actual += `（${t.completion}）`;
-          if (dc) actual += `\n解耦漂移 ${dc.drift}%`;
+        const totDist = dayRecs.reduce((s, t) => s + (t.distance || 0), 0);
+        const totDur = dayRecs.reduce((s, t) => s + (t.duration || 0), 0);
+        const totWarm = dayRecs.reduce((s, t) => s + (t.warmupKm || 0), 0);
+        const totExtraRun = dayRecs.reduce((s, t) => s + (t.extraRunKm || 0), 0);
+        const hrRecs = dayRecs.filter(t => t.hr);
+        const hrAvg = hrRecs.length ? Math.round(hrRecs.reduce((s, t) => s + t.hr, 0) / hrRecs.length) : null;
+        const notesJoin = dayRecs.map(t => t.notes).filter(Boolean).join('\n');
+        // 力量：按天计次 + 内容细分（一天多条力量也只算一次）
+        const strParts = [];
+        const kindsToday = new Set();
+        dayRecs.forEach(t => {
           const sm = (t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0);
-          if (sm) { strengthMin += sm; strengthCnt++; }
-          // 力量按天计次 + 内容细分（主课/力量区块/额外文本都算）
           const content = `${t.extra || ''} ${t.type === '力量训练' ? '力量' : ''}`;
-          const hasStr = sm > 0 || /力量|核心|hyrox|弓步/i.test(t.extra || '');
-          if (hasStr) {
-            strDaySet.add(d);
-            const kind = strengthKind(content);
-            strTypeMap[kind] = (strTypeMap[kind] || 0) + 1;
-            strPart = ((t.type === '力量训练' && !t.extra) ? '力量训练' : (t.extra || '力量训练'))
-              + (sm ? ` ${sm}min` : '') + (t.strengthHr ? ` HR${t.strengthHr}` : '');
-            strPart = strPart.trim();
-            strText = strPart;
+          if (!(sm > 0 || /力量|核心|hyrox|弓步/i.test(t.extra || ''))) return;
+          strDaySet.add(d);
+          if (sm) strengthMin += sm;
+          kindsToday.add(strengthKind(content));
+          strParts.push((((t.type === '力量训练' && !t.extra) ? '力量训练' : (t.extra || '力量训练'))
+            + (sm ? ` ${sm}min` : '') + (t.strengthHr ? ` HR${t.strengthHr}` : '')).trim());
+        });
+        kindsToday.forEach(k => { strTypeMap[k] = (strTypeMap[k] || 0) + 1; });
+        const strPart = strParts.join('；');
+        // 实际完成情况 = 当天每条记录各一行（课表内项目 + 热身冷身；课表含力量时力量也算课表内）
+        const lines = [];
+        dayRecs.forEach(t => {
+          if (t.type === '力量训练') {
+            lines.push('力量训练' + (t.duration ? ` ${t.duration}min` : '') + (t.hr ? ` 均心率${t.hr}` : ''));
+          } else if (t.distance) {
+            const p = t.duration ? secToPace(t.duration / t.distance * 60) : '';
+            lines.push(`${t.type} ${t.distance}km` + (p ? ` / ${p}` : '') + (t.duration ? ` / ${t.duration}min` : '') + (t.hr ? ` 均心率${t.hr}` : ''));
+          } else {
+            lines.push(`${t.type || '训练'}${t.duration ? ` ${t.duration}min` : ''}`);
           }
-        }
-        // 实际完成情况 = 课表内项目（主课 + 热身冷身；课表含力量时力量也算课表内）
-        let actualCell = fmtActual({ type: t ? t.type : '', dist: t ? (t.distance || 0) : 0, dur: t ? (t.duration || 0) : 0, hr: t ? t.hr : null, completion: t ? t.completion : '', actual });
-        if (t && t.warmupKm) actualCell += ` ＋热身冷身${t.warmupKm}km`;
-        if (planHasStr && strPart) actualCell += `\n${strPart}`;
+          if (t.completion && t.completion !== '按计划完成') lines.push(`　（${t.completion}）`);
+        });
+        if (totWarm) lines.push(`＋热身冷身 ${totWarm}km`);
+        if (dc) lines.push(`解耦漂移 ${dc.drift}%`);
+        if (planHasStr && strPart) lines.push(strPart);
+        const actualCell = lines.join('\n') || '—';
+        const actual = actualCell;
         // 额外训练 = 课表之外的安排（课表外力量、额外跑量、其他内容）；不含热身冷身
         const exBits = [];
         if (!planHasStr && strPart) exBits.push(strPart);
-        if (t && t.extraRunKm) exBits.push(`额外跑 ${t.extraRunKm}km`);
-        if (t && t.extra && !strPart) exBits.push(t.extra);
+        if (totExtraRun) exBits.push(`额外跑 ${totExtraRun}km`);
+        if (!strPart) {
+          const otherExtra = dayRecs.map(t => t.extra).filter(Boolean).join('；');
+          if (otherExtra) exBits.push(otherExtra);
+        }
         const extraCell = exBits.join('；') || '无';
+        const firstType = dayRecs.length ? dayRecs.map(t => t.type || '训练').join('＋') : '—';
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
-          type: t ? t.type : '—',
+          type: firstType,
+          recs: dayRecs,
           plan: planRaw,
           actual,
           actualCell,
           extraCell,
-          extra: t && t.extra ? t.extra : '无',
-          notes: t && t.notes ? t.notes : '',
+          extra: dayRecs.map(t => t.extra).filter(Boolean).join('；') || '无',
+          notes: notesJoin,
           planCat,
-          recordCat: t ? recordCategoryShort(t) : '',
-          strength: strText,
-          dist: t ? (t.distance || 0) : 0,
-          dur: t ? (t.duration || 0) : 0,
-          hr: t ? (t.hr || null) : null,
+          recordCat: dayRecs.length ? dayRecs.map(t => recordCategoryShort(t)).join('＋') : '',
+          strength: strPart,
+          dist: Math.round(totDist * 100) / 100,
+          dur: totDur,
+          hr: hrAvg,
+          warmupKm: totWarm,
+          extraRunKm: totExtraRun,
+          planHasStr,
           dateRaw: d,
-          completion: t ? (t.completion || '') : '',
-          warmupKm: t ? (t.warmupKm || 0) : 0,
-          extraRunKm: t ? (t.extraRunKm || 0) : 0,
-          planHasStr
+          completion: dayRecs.map(t => t.completion).filter(Boolean)[0] || ''
         };
       });
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
@@ -4733,13 +4833,13 @@
 
     function renderWeekly(offset = 0) {
       weeklyOffset = offset;
-      const { dates, rows, totalKm, strengthMin, strengthCnt } = collectWeeklyData();
+      const { dates, rows, totalKm, strengthMin, strDays } = collectWeeklyData();
       const injuries = loadFromStorage('injury');
       const recovery = loadFromStorage('recovery');
 
       document.getElementById('weeklyRange').textContent = `${formatDate(dates[0])} - ${formatDate(dates[6])}`;
       document.getElementById('weeklyKm').textContent = totalKm.toFixed(1);
-      document.getElementById('weeklyStrength').textContent = strengthCnt ? `${strengthMin}min / ${strengthCnt}次` : '—';
+      document.getElementById('weeklyStrength').textContent = strDays ? `${strengthMin}min / ${strDays}天` : '—';
 
       document.getElementById('weeklyTbody').innerHTML = rows.map(x => `
         <tr>
@@ -4828,22 +4928,24 @@
       };
       const actualCell = x => {
         const lines = [];
-        if (x.type === '力量训练') {
-          lines.push('力量训练' + (x.dur ? ` 用时 ${fmtHMS(x.dur)}` : '') + (x.hr ? `｜均心率 ${x.hr}` : ''));
-        } else if (x.dist) {
-          lines.push(`${x.type} ${x.dist} km`);
-          const parts = [];
-          if (x.dur) parts.push(`用时 ${fmtHMS(x.dur)}`);
-          if (x.dur) parts.push(`均配 ${secToPace(x.dur / x.dist * 60)}/km`);
-          if (x.hr) parts.push(`均心率 ${x.hr}`);
-          if (parts.length) lines.push(parts.join('｜'));
-        } else {
-          lines.push(x.actual === '—' ? '—' : x.actual);
-        }
-        if (x.completion) lines.push(`（${x.completion}）`);
+        const recs = (x.recs && x.recs.length) ? x.recs : [{ type: x.type, distance: x.dist, duration: x.dur, hr: x.hr, completion: x.completion }];
+        recs.forEach(t => {
+          if (t.type === '力量训练') {
+            lines.push('力量训练' + (t.duration ? ` 用时 ${fmtHMS(t.duration)}` : '') + (t.hr ? `｜均心率 ${t.hr}` : ''));
+          } else if (t.distance) {
+            lines.push(`${t.type} ${t.distance} km`);
+            const parts = [];
+            if (t.duration) { parts.push(`用时 ${fmtHMS(t.duration)}`); parts.push(`均配 ${secToPace(t.duration / t.distance * 60)}/km`); }
+            if (t.hr) parts.push(`均心率 ${t.hr}`);
+            if (parts.length) lines.push(parts.join('｜'));
+          } else {
+            lines.push(`${t.type || '训练'}${t.duration ? ' ' + fmtHMS(t.duration) : ''}`);
+          }
+          if (t.completion && t.completion !== '按计划完成') lines.push(`（${t.completion}）`);
+        });
         if (x.warmupKm) lines.push(`＋热身冷身 ${x.warmupKm} km`);
         if (x.planHasStr && x.strength) lines.push(x.strength);
-        return lines.join('\n');
+        return lines.join('\n') || '—';
       };
       const dayLabel = x => {
         const [mm, dd] = x.dateRaw.slice(5).split('-');
