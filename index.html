@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.16.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.17.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1735,10 +1735,21 @@
                   <input type="number" class="form-input" id="strengthHr" placeholder="均心率(选填)" min="60" max="220">
                 </div>
               </div>
-              <input type="text" class="form-input" id="trainingExtra" placeholder="内容：下肢负重、核心、hyrox…；额外加跑的里程可直接加进上方距离" style="margin-top:8px">
+              <input type="text" class="form-input" id="trainingExtra" placeholder="内容：下肢负重、核心、hyrox…" style="margin-top:8px">
             </div>
             <div class="form-group full">
-              <label class="form-label">4️⃣ 备注</label>
+              <label class="form-label">4️⃣ 热身/冷身 & 额外跑量（都计入总跑量）</label>
+              <div class="form-row">
+                <div class="form-group">
+                  <input type="number" class="form-input" id="warmupKm" placeholder="热身+冷身 km" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <input type="number" class="form-input" id="extraRunKm" placeholder="额外跑量 km（课表外加的）" min="0" step="0.01">
+                </div>
+              </div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">5️⃣ 备注</label>
               <textarea class="form-input" id="trainingNotes" placeholder="自动总结会填在这里，可改可补充"></textarea>
             </div>
           </div>
@@ -2567,6 +2578,8 @@
           extra: tExtra,
           strengthDuration: tStrength,
           strengthHr: tStrengthHr,
+          warmupKm: parseFloat(document.getElementById('warmupKm').value) || 0,
+          extraRunKm: parseFloat(document.getElementById('extraRunKm').value) || 0,
           weather: document.getElementById('trainingWeather').value,
           notes: tNotes
         };
@@ -2732,6 +2745,8 @@
       document.getElementById('trainingExtra').value = '';
       document.getElementById('strengthDuration').value = '';
       document.getElementById('strengthHr').value = '';
+      document.getElementById('warmupKm').value = '';
+      document.getElementById('extraRunKm').value = '';
       document.querySelectorAll('#injuryParts .ip-chip').forEach(c => c.classList.remove('active'));
       document.getElementById('injuryPartOther').value = '';
       document.getElementById('injuryPartOther').style.display = 'none';
@@ -2800,6 +2815,8 @@
       if (todayTraining && todayTraining.strengthDuration) {
         digest.push(`💪 力量 ${todayTraining.strengthDuration}min` + (todayTraining.strengthHr ? ` 均心率${todayTraining.strengthHr}` : ''));
       }
+      if (todayTraining && todayTraining.warmupKm) digest.push(`🏃 热身/冷身 ${todayTraining.warmupKm}km（计入跑量）`);
+      if (todayTraining && todayTraining.extraRunKm) digest.push(`➕ 额外跑量 ${todayTraining.extraRunKm}km（计入跑量）`);
       const planInfo2 = getPlanForDate(today);
       if (planInfo2) {
         const items = splitPlanItems(planInfo2.raw);
@@ -4060,6 +4077,8 @@
         set('trainingExtra', t.extra || '');
         set('strengthDuration', t.strengthDuration || '');
         set('strengthHr', t.strengthHr || '');
+        set('warmupKm', t.warmupKm || '');
+        set('extraRunKm', t.extraRunKm || '');
         set('trainingWeather', t.weather || '');
         set('trainingNotes', t.notes || '');
       } else {
@@ -4648,16 +4667,20 @@
       const strTypeMap = {};
       const rows = dates.map((d, i) => {
         const t = trainings.find(x => x.date === d);
-        if (t && t.distance) totalKm += t.distance;
+        if (t) totalKm += (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0);
         const dc = decoupling.find(x => x.date === d);
+        const planRaw = (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '';
+        const planCat = planRaw ? planCategoryShort(planRaw) : '';
+        const planHasStr = /力量|技术/.test(planCat);
         let actual = '—';
         let strText = '';
+        let strPart = '';
         if (t) {
           actual = `${t.type} ${t.distance || 0}km ${t.duration || 0}min` + (t.hr ? ` 均心率${t.hr}bpm` : '');
           if (t.completion) actual += `（${t.completion}）`;
           if (dc) actual += `\n解耦漂移 ${dc.drift}%`;
           const sm = (t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0);
-          if (sm) { strengthMin += sm; strengthCnt++; if (t.type !== '力量训练') actual += `\n＋力量${sm}min`; }
+          if (sm) { strengthMin += sm; strengthCnt++; }
           // 力量按天计次 + 内容细分（主课/力量区块/额外文本都算）
           const content = `${t.extra || ''} ${t.type === '力量训练' ? '力量' : ''}`;
           const hasStr = sm > 0 || /力量|核心|hyrox|弓步/i.test(t.extra || '');
@@ -4665,27 +4688,42 @@
             strDaySet.add(d);
             const kind = strengthKind(content);
             strTypeMap[kind] = (strTypeMap[kind] || 0) + 1;
-            strText = (t.type !== '力量训练' ? (t.extra || '力量训练') + ' ' : (t.extra ? t.extra + ' ' : ''))
-              + (sm ? `${sm}min` : '') + (t.strengthHr ? ` HR${t.strengthHr}` : '');
-            strText = strText.trim();
+            strPart = ((t.type === '力量训练' && !t.extra) ? '力量训练' : (t.extra || '力量训练'))
+              + (sm ? ` ${sm}min` : '') + (t.strengthHr ? ` HR${t.strengthHr}` : '');
+            strPart = strPart.trim();
+            strText = strPart;
           }
         }
-        const planRaw = (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '';
+        // 实际完成情况 = 课表内项目（主课 + 热身冷身；课表含力量时力量也算课表内）
+        let actualCell = fmtActual({ type: t ? t.type : '', dist: t ? (t.distance || 0) : 0, dur: t ? (t.duration || 0) : 0, hr: t ? t.hr : null, completion: t ? t.completion : '', actual });
+        if (t && t.warmupKm) actualCell += ` ＋热身冷身${t.warmupKm}km`;
+        if (planHasStr && strPart) actualCell += `\n${strPart}`;
+        // 额外训练 = 课表之外的安排（课表外力量、额外跑量、其他内容）；不含热身冷身
+        const exBits = [];
+        if (!planHasStr && strPart) exBits.push(strPart);
+        if (t && t.extraRunKm) exBits.push(`额外跑 ${t.extraRunKm}km`);
+        if (t && t.extra && !strPart) exBits.push(t.extra);
+        const extraCell = exBits.join('；') || '无';
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
           type: t ? t.type : '—',
           plan: planRaw,
           actual,
+          actualCell,
+          extraCell,
           extra: t && t.extra ? t.extra : '无',
           notes: t && t.notes ? t.notes : '',
-          planCat: planRaw ? planCategoryShort(planRaw) : '',
+          planCat,
           recordCat: t ? recordCategoryShort(t) : '',
           strength: strText,
           dist: t ? (t.distance || 0) : 0,
           dur: t ? (t.duration || 0) : 0,
           hr: t ? (t.hr || null) : null,
           dateRaw: d,
-          completion: t ? (t.completion || '') : ''
+          completion: t ? (t.completion || '') : '',
+          warmupKm: t ? (t.warmupKm || 0) : 0,
+          extraRunKm: t ? (t.extraRunKm || 0) : 0,
+          planHasStr
         };
       });
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
@@ -4705,8 +4743,8 @@
         <tr>
           <td style="white-space:nowrap">${x.day}</td>
           <td class="wk-plan">${x.plan || '—'}</td>
-          <td>${x.actual.replace(/\n/g, '<br>')}</td>
-          <td>${x.extra}</td>
+          <td>${(x.actualCell || x.actual).replace(/\n/g, '<br>')}</td>
+          <td>${x.extraCell || x.extra}</td>
           <td class="wk-note">${x.notes || '—'}</td>
         </tr>`).join('');
 
@@ -4801,6 +4839,8 @@
           lines.push(x.actual === '—' ? '—' : x.actual);
         }
         if (x.completion) lines.push(`（${x.completion}）`);
+        if (x.warmupKm) lines.push(`＋热身冷身 ${x.warmupKm} km`);
+        if (x.planHasStr && x.strength) lines.push(x.strength);
         return lines.join('\n');
       };
       const dayLabel = x => {
@@ -4850,7 +4890,7 @@
       // ④ 七天数据行
       rows.forEach((x, idx) => {
         const typeText = x.planCat || x.recordCat || '';
-        const extraText = x.strength || (x.extra !== '无' ? x.extra : '') || '无';
+        const extraText = x.extraCell || '无';
         const vals = [dayLabel(x), typeText, prettyPlan(x.plan), actualCell(x), extraText, x.notes || ''];
         const row = ws.addRow(vals);
         const rowNo = idx + 4;
