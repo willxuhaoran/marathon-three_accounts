@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.17.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.17.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -4478,8 +4478,10 @@
         else if (nm.endsWith('.fit')) r = parseFitBuffer(await f.arrayBuffer(), f.name);
         else { showToast('只支持 .fit / .tcx / .gpx 文件', 'error'); return; }
         if (!r) { showToast('文件里没解析到训练数据', 'error'); return; }
+        const selDate = getRecordDate();
         parseAndFillResult(r);
-        showToast('已从文件导入训练数据', 'success');
+        if (r.date && r.date !== selDate) showToast(`文件日期 ${r.date}（你之前选的是 ${selDate}），已按文件日期填入`, 'success');
+        else showToast(`已导入 ${r.date || ''} 的训练数据`, 'success');
       } catch (e) { console.error(e); showToast('文件解析失败：' + e.message, 'error'); }
     }
     function parseTcxGpx(text, isGpx, fname) {
@@ -4505,7 +4507,7 @@
         const cadLaps = laps.filter(l => l.cad);
         const cad = cadLaps.length ? cadLaps.reduce((s, l) => s + l.cad, 0) / cadLaps.length : 0;
         const idTxt = q('Id') ? q('Id').textContent : '';
-        const date = idTxt ? idTxt.slice(0, 10) : getRecordDate();
+        const date = idTxt ? getDateStr(new Date(idTxt)) : getRecordDate(); // TCX 时间为 UTC，需转本地日期
         let type;
         if (/bik/i.test(sport)) type = '交叉训练';
         else if (/other/i.test(sport) && /力量|核心|strength/i.test(nameHint)) type = '力量训练';
@@ -4541,7 +4543,7 @@
       });
       const distKm = distM / 1000, durMin = t1 > t0 ? (t1 - t0) / 60000 : 0;
       const type = guessPlanType(nameHint) || (distKm >= 15 ? '长跑' : 'E跑');
-      return finishTrackRecord({ date: new Date(t0 || Date.now()).toISOString().slice(0, 10), type, distKm, durMin, hr: hrN ? hrSum / hrN : 0, hrMax, asc, cal: 0, cad: 0 });
+      return finishTrackRecord({ date: getDateStr(new Date(t0 || Date.now())), type, distKm, durMin, hr: hrN ? hrSum / hrN : 0, hrMax, asc, cal: 0, cad: 0 });
     }
     function parseFitBuffer(buf, fname) {
       if (typeof Fitsdk === 'undefined') throw new Error('FIT 组件未加载');
@@ -4563,7 +4565,7 @@
       let cad = s.avgCadence || 0;
       if (type !== '交叉训练' && cad && cad < 120) cad *= 2; // 跑步为单步值
       return finishTrackRecord({
-        date: s.startTime ? new Date(s.startTime).toISOString().slice(0, 10) : getRecordDate(),
+        date: s.localTimestamp ? new Date(s.localTimestamp).toISOString().slice(0, 10) : (s.startTime ? getDateStr(s.startTime) : getRecordDate()),
         type, distKm, durMin,
         hr: s.avgHeartRate, hrMax: s.maxHeartRate,
         asc: s.totalAscent, cal: s.totalCalories, cad,
