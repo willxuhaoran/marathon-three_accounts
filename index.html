@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.19.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.19.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2133,7 +2133,7 @@
         <div class="card" style="padding:18px;margin-bottom:16px;overflow-x:auto">
           <h3 class="section-title">计划 vs 实际（自动生成）</h3>
           <table class="wk-table">
-            <thead><tr><th>日期</th><th>计划内容</th><th>实际完成</th><th>额外</th><th>训练感受 <span style="font-weight:400;font-size:11px">(点击可编辑)</span></th></tr></thead>
+            <thead><tr><th>日期</th><th>计划内容</th><th>实际完成</th><th>额外</th><th>训练感受</th></tr></thead>
             <tbody id="weeklyTbody"></tbody>
           </table>
           <div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)" id="weeklyInjuries"></div>
@@ -2408,7 +2408,7 @@
     let selectedWater = 0;
     let charts = {};
     let editingRecordId = null; // 正在编辑的训练记录 id（null = 新增一条）
-    let weeklyEditingNote = null; // 周报中正在编辑感受的日期
+    let weeklyEditing = null; // 周报中正在编辑的单元格 {date, field}
     let selectedTemplate = null;
 
     // Initialize
@@ -4287,7 +4287,7 @@
     function exportAllData() {
       const keys = ['marathon_training_records', 'marathon_injury_records', 'marathon_recovery_records',
         'marathon_mental_records', 'marathon_diet_records', 'marathon_body_records', 'marathon_goals',
-        'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done', 'marathon_day_notes'];
+        'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done', 'marathon_day_notes', 'marathon_week_overrides'];
       const data = {};
       keys.forEach(k => { const v = localStorage.getItem(k); if (v) { try { data[k] = JSON.parse(v); } catch (e) { data[k] = v; } } });
       const json = JSON.stringify({ app: '三本账', version: 'v1.13.1', exportedAt: new Date().toISOString(), data }, null, 1);
@@ -4798,7 +4798,7 @@
         if (dc) lines.push(`解耦漂移 ${dc.drift}%`);
         if (planHasStr && strPart) lines.push(strPart);
         const actualCell = lines.join('\n') || '—';
-        const actual = actualCell;
+        const actual = (weekOverrides()[d] || {}).actual !== undefined ? weekOverrides()[d].actual : actualCell;
         // 额外训练 = 课表之外的安排（课表外力量、额外跑量、其他内容）；不含热身冷身
         const exBits = [];
         if (!planHasStr && strPart) exBits.push(strPart);
@@ -4813,12 +4813,12 @@
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
           type: firstType,
           recs: dayRecs,
-          plan: planRaw,
+          plan: (weekOverrides()[d] || {}).plan !== undefined ? weekOverrides()[d].plan : planRaw,
           actual,
-          actualCell,
-          extraCell,
+          actualCell: (weekOverrides()[d] || {}).actual !== undefined ? weekOverrides()[d].actual : actualCell,
+          extraCell: (weekOverrides()[d] || {}).extra !== undefined ? weekOverrides()[d].extra : extraCell,
           extra: dayRecs.map(t => t.extra).filter(Boolean).join('；') || '无',
-          notes: notesJoin,
+          notes: (weekOverrides()[d] || {}).notes !== undefined ? weekOverrides()[d].notes : notesJoin,
           planCat,
           recordCat: dayRecs.length ? dayRecs.map(t => recordCategoryShort(t)).join('＋') : '',
           strength: strPart,
@@ -4835,35 +4835,67 @@
       return { dates, rows, totalKm, strengthMin, strengthCnt, strDays: strDaySet.size, strTypeMap };
     }
 
-    function startEditWeekNote(date) {
-      weeklyEditingNote = date;
+    // —— 周报单元格编辑（计划/实际/额外/感受 都可改；改动存为覆盖值，可恢复自动） ——
+    function weekOverrides() {
+      try { return JSON.parse(localStorage.getItem('marathon_week_overrides') || '{}'); } catch (e) { return {}; }
+    }
+    function startEditWeekCell(date, field) {
+      weeklyEditing = { date, field };
       renderWeekly(weeklyOffset);
-      const ta = document.getElementById('wkNoteEdit');
+      const ta = document.getElementById('wkCellEdit');
       if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     }
-    function cancelEditWeekNote() {
-      weeklyEditingNote = null;
+    function cancelEditWeekCell() {
+      weeklyEditing = null;
       renderWeekly(weeklyOffset);
     }
-    function saveWeekNote(date) {
-      const ta = document.getElementById('wkNoteEdit');
+    function saveWeekCell(date, field) {
+      const ta = document.getElementById('wkCellEdit');
       const text = ta ? ta.value.trim() : '';
-      const trainings = loadFromStorage('training');
-      const dayRecs = trainings.filter(t => t.date === date);
-      if (dayRecs.length === 1) {
-        // 单条记录：直接改那条记录的备注（与记录页同步）
-        dayRecs[0].notes = text;
-        saveToStorage('training', trainings);
-      } else {
-        // 多条记录或无记录：存为"当天感受"
-        const all = JSON.parse(localStorage.getItem('marathon_day_notes') || '{}');
-        all[date] = text;
-        localStorage.setItem('marathon_day_notes', JSON.stringify(all));
+      const all = weekOverrides();
+      all[date] = all[date] || {};
+      all[date][field] = text;
+      localStorage.setItem('marathon_week_overrides', JSON.stringify(all));
+      // 感受：当天只有一条记录时同步回记录页
+      if (field === 'notes') {
+        const trainings = loadFromStorage('training');
+        const dayRecs = trainings.filter(t => t.date === date);
+        if (dayRecs.length === 1) {
+          dayRecs[0].notes = text;
+          saveToStorage('training', trainings);
+          loadTodayData(getRecordDate());
+        }
       }
-      weeklyEditingNote = null;
+      weeklyEditing = null;
       renderWeekly(weeklyOffset);
-      loadTodayData(getRecordDate());
-      showToast('感受已保存', 'success');
+      showToast('已保存', 'success');
+    }
+    function clearWeekOverride(date, field) {
+      const all = weekOverrides();
+      if (all[date]) {
+        delete all[date][field];
+        if (!Object.keys(all[date]).length) delete all[date];
+        localStorage.setItem('marathon_week_overrides', JSON.stringify(all));
+      }
+      weeklyEditing = null;
+      renderWeekly(weeklyOffset);
+      showToast('已恢复自动生成', 'success');
+    }
+    function wkCell(x, field, rawText, htmlText) {
+      const editing = weeklyEditing && weeklyEditing.date === x.dateRaw && weeklyEditing.field === field;
+      const ov = (weekOverrides()[x.dateRaw] || {})[field];
+      if (editing) {
+        return `<td style="min-width:150px">
+          <textarea id="wkCellEdit" class="form-input" rows="4" placeholder="编辑…" onclick="event.stopPropagation()">${(rawText || '').replace(/</g, '&lt;')}</textarea>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();saveWeekCell('${x.dateRaw}','${field}')">保存</button>
+            <button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="event.stopPropagation();cancelEditWeekCell()">取消</button>
+            ${ov !== undefined ? `<button class="dc-btn" style="background:rgba(255,107,53,.2);color:#FFB08A;font-size:11px;padding:4px 10px" onclick="event.stopPropagation();clearWeekOverride('${x.dateRaw}','${field}')">恢复自动</button>` : ''}
+          </div></td>`;
+      }
+      const mark = ov !== undefined ? ' <span style="color:var(--secondary);font-size:10px">✎</span>' : '';
+      const body = htmlText || '<span style="color:var(--surface-lighter)">点击编辑…</span>';
+      return `<td style="cursor:pointer;min-width:140px" onclick="startEditWeekCell('${x.dateRaw}','${field}')" title="点击编辑">${body}${mark}</td>`;
     }
 
     function renderWeekly(offset = 0) {
@@ -4879,18 +4911,10 @@
       document.getElementById('weeklyTbody').innerHTML = rows.map(x => `
         <tr>
           <td style="white-space:nowrap">${x.day}</td>
-          <td class="wk-plan">${x.plan || '—'}</td>
-          <td>${(x.actualCell || x.actual).replace(/\n/g, '<br>')}</td>
-          <td>${x.extraCell || x.extra}</td>
-          <td class="wk-note" style="cursor:pointer;min-width:160px" onclick="startEditWeekNote('${x.dateRaw}')" title="点击编辑感受">
-            ${weeklyEditingNote === x.dateRaw
-              ? `<textarea id="wkNoteEdit" class="form-input" rows="4" onclick="event.stopPropagation()" placeholder="写点感受…">${(x.notes || '').replace(/</g, '&lt;')}</textarea>
-                 <div style="margin-top:6px;display:flex;gap:6px">
-                   <button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();saveWeekNote('${x.dateRaw}')">保存</button>
-                   <button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="event.stopPropagation();cancelEditWeekNote()">取消</button>
-                 </div>`
-              : (x.notes ? x.notes.replace(/\n/g, '<br>') : '<span style="color:var(--surface-lighter)">点击添加感受…</span>')}
-          </td>
+          ${wkCell(x, 'plan', x.plan, x.plan ? `<span class="wk-plan">${x.plan.replace(/\n/g, '<br>')}</span>` : '')}
+          ${wkCell(x, 'actual', x.actualCell || x.actual, (x.actualCell || x.actual || '').replace(/\n/g, '<br>'))}
+          ${wkCell(x, 'extra', (x.extraCell && x.extraCell !== '无') ? x.extraCell : '', (x.extraCell || '无'))}
+          ${wkCell(x, 'notes', x.notes, x.notes ? x.notes.replace(/\n/g, '<br>') : '')}
         </tr>`).join('');
 
       const wkInj = injuries.filter(x => dates.includes(x.date));
