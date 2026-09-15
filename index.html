@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.20.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.20.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2132,6 +2132,7 @@
 
         <div class="card" style="padding:18px;margin-bottom:16px;overflow-x:auto">
           <h3 class="section-title">计划 vs 实际（自动生成）</h3>
+          <div id="weeklyHint" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.45);border-radius:10px;font-size:12.5px"></div>
           <table class="wk-table">
             <thead><tr><th>日期</th><th>计划内容</th><th>实际完成</th><th>额外</th><th>训练感受</th></tr></thead>
             <tbody id="weeklyTbody"></tbody>
@@ -2742,6 +2743,8 @@
       loadTodayData(today);
       loadWeekPlan();
       renderDayPlan(today);
+      const wkTab = document.getElementById('tab-weekly');
+      if (wkTab && wkTab.classList.contains('active')) renderWeekly(weeklyOffset);
       coachAfterSave(trainingType, savedDistance, savedDuration, today);
       clearForms();
     }
@@ -4801,7 +4804,6 @@
         const actualCell = lines.join('\n') || '—';
         const ovD = weekOverrides()[d] || {};
         const actual = ovValue(ovD.actual) !== undefined ? ovValue(ovD.actual) : actualCell;
-        const autoVals = { plan: planRaw, actual: actualCell, extra: extraCell, notes: notesJoin };
         // 额外训练 = 课表之外的安排（课表外力量、额外跑量、其他内容）；不含热身冷身
         const exBits = [];
         if (!planHasStr && strPart) exBits.push(strPart);
@@ -4811,6 +4813,7 @@
           if (otherExtra) exBits.push(otherExtra);
         }
         const extraCell = exBits.join('；') || '无';
+        const autoVals = { plan: planRaw, actual: actualCell, extra: extraCell, notes: notesJoin };
         const firstType = dayRecs.length ? dayRecs.map(t => t.type || '训练').join('＋') : '—';
         return {
           day: `${dayNames[i]} ${d.slice(5).replace('-', '月')}日`,
@@ -4968,6 +4971,25 @@
       document.getElementById('weeklyRange').textContent = `${formatDate(dates[0])} - ${formatDate(dates[6])}`;
       document.getElementById('weeklyKm').textContent = totalKm.toFixed(1);
       document.getElementById('weeklyStrength').textContent = strDays ? `${strengthMin}min / ${strDays}天` : '—';
+
+      // 本周无记录时，提示最近记录在哪一周并可一键跳转
+      const hint = document.getElementById('weeklyHint');
+      if (hint) {
+        const weekCount = rows.filter(r => r.recs.length).length;
+        const allT = loadFromStorage('training');
+        if (!weekCount && allT.length) {
+          const latest = allT.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
+          if (latest && latest.date && !dates.includes(latest.date)) {
+            const dObj = new Date(latest.date);
+            const dow = dObj.getDay();
+            const monday = new Date(dObj);
+            monday.setDate(dObj.getDate() - (dow === 0 ? 6 : dow - 1));
+            const weeksAgo = Math.round((new Date(dates[0]) - monday) / (7 * 86400000));
+            hint.style.display = 'block';
+            hint.innerHTML = `⚠️ 这一周没有训练记录。最近一条是 <b>${latest.date}</b>（${latest.type || '训练'} ${latest.distance || 0}km）　<button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="renderWeekly(${weeklyOffset - weeksAgo})">跳到那一周 ›</button>`;
+          } else hint.style.display = 'none';
+        } else hint.style.display = 'none';
+      }
 
       document.getElementById('weeklyTbody').innerHTML = rows.map(x => `
         <tr>
