@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.20.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.21.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2155,10 +2155,10 @@
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">伤病指数 (1-5)</label>
+            <label class="form-label">伤病指数 (0-5 · 0=本周无伤病)</label>
             <div class="range-container">
-              <input type="range" class="range-slider" id="weeklyInjuryIdx" min="1" max="5" step="0.5" value="1" oninput="document.getElementById('weeklyInjuryIdxValue').textContent=this.value">
-              <div class="range-value" id="weeklyInjuryIdxValue">1</div>
+              <input type="range" class="range-slider" id="weeklyInjuryIdx" min="0" max="5" step="0.5" value="0" oninput="document.getElementById('weeklyInjuryIdxValue').textContent=this.value">
+              <div class="range-value" id="weeklyInjuryIdxValue">0</div>
             </div>
           </div>
           <div class="form-group full">
@@ -2994,7 +2994,7 @@
             </div>
           `;
         } else if (record.recordType === 'injury') {
-          const severityClass = record.severity <= 3 ? 'mild' : record.severity <= 6 ? 'moderate' : 'severe';
+          const severityClass = record.severity <= 2 ? 'mild' : record.severity <= 3 ? 'moderate' : 'severe';
           return `
             <div class="history-item">
               <div class="history-date">${formatDate(record.date)}</div>
@@ -5014,8 +5014,8 @@
       const saved = reports.find(r => r.weekStart === dates[0]);
       document.getElementById('weeklyFatigue').value = saved ? saved.fatigue : 3;
       document.getElementById('weeklyFatigueValue').textContent = saved ? saved.fatigue : 3;
-      document.getElementById('weeklyInjuryIdx').value = saved ? saved.injury : 1;
-      document.getElementById('weeklyInjuryIdxValue').textContent = saved ? saved.injury : 1;
+      document.getElementById('weeklyInjuryIdx').value = saved ? saved.injury : 0;
+      document.getElementById('weeklyInjuryIdxValue').textContent = saved ? saved.injury : 0;
       const titleEl = document.getElementById('weeklyTitle');
       if (titleEl) titleEl.value = (saved && saved.title) ? saved.title : `周训练情况反馈（${dates[0]} 至 ${dates[6]}）`;
       document.getElementById('weeklyManagement').value = saved ? saved.management : '';
@@ -5173,7 +5173,7 @@
       ws.mergeCells(`A${row11}:C${row11}`);
       ws.mergeCells(`D${row11}:F${row11}`);
       const a11 = ws.getCell(`A${row11}`);
-      a11.value = `疲劳程度：${r.fatigue}/5\n伤病指数：${r.injury}/5`;
+      a11.value = `疲劳程度：${r.fatigue}（1-5）\n伤病指数：${r.injury}（0-5，0=无伤病）`;
       a11.font = { name: FONT, size: 9, bold: true, color: { argb: 'FF9C5700' } };
       a11.fill = fill('FFFFF2CC');
       a11.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
@@ -5256,7 +5256,7 @@
         if (x.notes) lines.push(`感受：${x.notes}`);
         lines.push('');
       });
-      lines.push(`疲劳程度：${r.fatigue}/5 ｜ 伤病指数：${r.injury}/5`);
+      lines.push(`疲劳程度：${r.fatigue}/5 ｜ 伤病指数：${r.injury}（0-5，0=无伤病）`);
       if (r.management) lines.push(`伤病与疲劳管理：${r.management}`);
       lines.push(`本周跑量：约${totalKm.toFixed(0)}km`);
       if (strDays) lines.push(`力量训练：${strDays} 天（次）${Object.keys(strTypeMap).length ? '｜' + Object.entries(strTypeMap).map(([k, v]) => `${k}×${v}`).join('，') : ''}`);
