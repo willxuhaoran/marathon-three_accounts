@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.22.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.22.1</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2411,7 +2411,7 @@
       const arr = loadFromStorage('training');
       let fixed = 0;
       arr.forEach(t => {
-        ['distance', 'duration', 'hr', 'rpe', 'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm'].forEach(k => {
+        ['distance', 'duration', 'hr', 'rpe', 'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm', 'pace'].forEach(k => {
           if (t[k] !== undefined && t[k] !== null && typeof t[k] !== 'number') { t[k] = num(t[k]); fixed++; }
         });
         if (t.pace !== undefined && t.pace !== null && typeof t.pace !== 'number' && typeof t.pace === 'string' && t.pace !== '') t.pace = num(t.pace);
@@ -2566,9 +2566,28 @@
       localStorage.setItem(STORAGE_KEYS[key], JSON.stringify(data));
     }
 
+    // 数值字段净化：无论数据从哪来，读出来一律是 number
+    function normalizeRecord(key, r) {
+      if (!r || typeof r !== 'object') return r;
+      const numFields = {
+        training: ['distance', 'duration', 'hr', 'rpe', 'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm'],
+        recovery: ['fatigue', 'sleepQuality', 'sleepHours', 'restingHR', 'hrv'],
+        body: ['weight', 'morningWeight', 'eveningWeight'],
+        injury: ['severity'],
+        diet: ['water', 'dietQuality']
+      }[key] || [];
+      numFields.forEach(k => {
+        if (r[k] !== undefined && r[k] !== null && typeof r[k] !== 'number') r[k] = num(r[k]);
+      });
+      if (key === 'training' && typeof r.pace === 'string' && r.pace !== '') r.pace = num(r.pace);
+      return r;
+    }
+
     function loadFromStorage(key) {
       const data = localStorage.getItem(STORAGE_KEYS[key]);
-      return data ? JSON.parse(data) : [];
+      const parsed = data ? JSON.parse(data) : [];
+      if (Array.isArray(parsed)) return parsed.map(r => normalizeRecord(key, r));
+      return parsed;
     }
 
     function generateId() {
@@ -2856,7 +2875,7 @@
         const totMin = dayList.reduce((s, t) => s + num(t.duration), 0);
         digest.push(`🏃 今日合计 ${Math.round(totKm * 100) / 100}km · ${fmtDur(totMin) || '—'}（${dayList.length} 条）`);
         dayList.forEach(t => {
-          let line = `　· ${t.type || '训练'} ${t.distance || 0}km`;
+          let line = `　· ${t.type || '训练'} ${Math.round(num(t.distance) * 100) / 100}km`;
           if (t.duration) line += ` ${fmtDur(t.duration)}`;
           if (t.hr) line += ` 均心率${t.hr}`;
           if (t.warmupKm) line += ` ＋热身冷身${t.warmupKm}km`;
@@ -3106,7 +3125,7 @@
       const weekTrainings = trainings.filter(t => weekDates.includes(t.date));
       const weekRecoveries = recoveries.filter(r => weekDates.includes(r.date));
 
-      const totalDistance = weekTrainings.reduce((sum, t) => sum + (t.distance || 0), 0);
+      const totalDistance = weekTrainings.reduce((sum, t) => sum + num(t.distance), 0);
       const totalTime = weekTrainings.reduce((sum, t) => sum + (t.duration || 0), 0);
       const trainingDays = weekTrainings.length;
 
@@ -3403,7 +3422,7 @@
         const dayPlan = weekPlan.days[index] || '';
         const rawPlan = (weekPlan.daysRaw && weekPlan.daysRaw[index]) || '';
         const dayRecs0 = trainings.filter(t => t.date === date);
-        const training = dayRecs0.length ? Object.assign({}, dayRecs0[0], { distance: dayRecs0.reduce((s2, t2) => s2 + (t2.distance || 0), 0), duration: dayRecs0.reduce((s2, t2) => s2 + (t2.duration || 0), 0) }) : undefined;
+        const training = dayRecs0.length ? Object.assign({}, dayRecs0[0], { distance: dayRecs0.reduce((s2, t2) => s2 + num(t2.distance), 0), duration: dayRecs0.reduce((s2, t2) => s2 + num(t2.duration), 0) }) : undefined;
         const isToday = date === today;
         const isPast = new Date(date) < new Date(today);
 
@@ -3491,7 +3510,7 @@
       document.getElementById('planRemaining').textContent = weekDates.filter((d, i) => {
         const plan = weekPlan.days[i];
         const dayRecs1 = trainings.filter(t => t.date === d);
-        const training = dayRecs1.length ? Object.assign({}, dayRecs1[0], { distance: dayRecs1.reduce((s2, t2) => s2 + (t2.distance || 0), 0), duration: dayRecs1.reduce((s2, t2) => s2 + (t2.duration || 0), 0) }) : undefined;
+        const training = dayRecs1.length ? Object.assign({}, dayRecs1[0], { distance: dayRecs1.reduce((s2, t2) => s2 + num(t2.distance), 0), duration: dayRecs1.reduce((s2, t2) => s2 + num(t2.duration), 0) }) : undefined;
         return plan && plan !== '休息' && (!training || training.distance === 0);
       }).length;
     }
@@ -4146,15 +4165,15 @@
       if (!box) return;
       const list = loadFromStorage('training').filter(t => t.date === date);
       if (!list.length) { box.innerHTML = '<div style="font-size:12.5px;color:var(--text-secondary)">这一天还没有训练记录</div>'; return; }
-      const totKm = list.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
+      const totKm = list.reduce((s, t) => s + num(t.distance) + num(t.warmupKm) + num(t.extraRunKm), 0);
       box.innerHTML = `<div style="font-size:12.5px;color:var(--primary);margin-bottom:6px">合计 ${Math.round(totKm * 100) / 100} km · ${list.reduce((s, t) => s + (t.duration || 0), 0)} min（${list.length} 条）</div>`
         + list.map(t => `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--surface-light);border-radius:8px;margin-top:6px">
             <div style="font-size:12.5px;line-height:1.5">
-              <b>${t.type || '训练'}</b> ${t.distance || 0}km ${t.duration || 0}min${t.hr ? ` 均心率${t.hr}` : ''}
-              ${t.strengthDuration ? `<br>💪 力量 ${t.strengthDuration}min` : ''}
-              ${t.extraRunKm ? `<br>➕ 额外跑 ${t.extraRunKm}km` : ''}
-              ${t.warmupKm ? `<br>热身冷身 ${t.warmupKm}km` : ''}
+              <b>${t.type || '训练'}</b> ${Math.round(num(t.distance) * 100) / 100}km ${num(t.duration)}min${t.hr ? ` 均心率${t.hr}` : ''}
+              ${num(t.strengthDuration) ? `<br>💪 力量 ${num(t.strengthDuration)}min` : ''}
+              ${num(t.extraRunKm) ? `<br>➕ 额外跑 ${num(t.extraRunKm)}km` : ''}
+              ${num(t.warmupKm) ? `<br>热身冷身 ${num(t.warmupKm)}km` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">
               <button class="dc-btn" style="background:var(--surface-lighter);font-size:11px;padding:5px 10px" onclick="startEditRecord('${t.id}')">编辑</button>
@@ -4687,7 +4706,7 @@
       const injuries = loadFromStorage('injury').filter(x => dates.includes(x.date));
       const recs = loadFromStorage('recovery').filter(x => dates.includes(x.date));
       const runs = trainings.filter(t => ['长跑', 'E跑', '间歇跑', '节奏跑'].includes(t.type));
-      const totalKm = runs.reduce((s, t) => s + (t.distance || 0), 0);
+      const totalKm = runs.reduce((s, t) => s + num(t.distance), 0);
       const strengthMin = trainings.reduce((s, t) => s + ((t.strengthDuration || 0) || (t.type === '力量训练' ? (t.duration || 0) : 0)), 0);
       const strengthCnt = new Set(trainings.filter(t => (t.strengthDuration || 0) > 0 || t.type === '力量训练').map(t => t.date)).size;
       const prevKm = loadFromStorage('training').filter(x => getWeekDates(weeklyOffset - 1).includes(x.date))
