@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.21.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.22.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1704,7 +1704,7 @@
             <div class="type-tip" id="typeTip" style="display:none"></div>
             <!-- 数据字段：仅由识别/课表写入 -->
             <div style="display:none">
-              <select id="trainingType"><option value="">选择类型</option><option value="长跑">长跑</option><option value="间歇跑">间歇跑</option><option value="节奏跑">节奏跑</option><option value="E跑">E跑(轻松跑)</option><option value="力量训练">力量训练</option><option value="交叉训练">交叉训练</option><option value="休息日">休息日</option></select>
+              <select id="trainingType"><option value="">选择类型</option><option value="长跑">长跑</option><option value="间歇跑">间歇跑</option><option value="节奏跑">节奏跑</option><option value="E跑">E跑(轻松跑)</option><option value="力量训练">力量训练</option><option value="交叉训练">交叉训练</option><option value="热身/冷身">热身/冷身</option><option value="休息日">休息日</option></select>
               <select id="trainingWeather"><option value="">选择天气</option><option value="晴">晴</option><option value="阴">阴</option><option value="小雨">小雨</option><option value="大雨">大雨</option><option value="雪">雪</option><option value="高温">高温</option><option value="低温">低温</option></select>
               <input type="number" id="trainingDistance">
               <input type="number" id="trainingDuration">
@@ -2404,6 +2404,22 @@
       plan: 'marathon_week_plan'
     };
 
+    // 数值安全：任何来源的数字都强制转 number（防字符串拼接出乱码）
+    function num(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
+    // 启动自检：修正历史数据里被存成字符串的数值字段
+    function sanitizeTrainings() {
+      const arr = loadFromStorage('training');
+      let fixed = 0;
+      arr.forEach(t => {
+        ['distance', 'duration', 'hr', 'rpe', 'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm'].forEach(k => {
+          if (t[k] !== undefined && t[k] !== null && typeof t[k] !== 'number') { t[k] = num(t[k]); fixed++; }
+        });
+        if (t.pace !== undefined && t.pace !== null && typeof t.pace !== 'number' && typeof t.pace === 'string' && t.pace !== '') t.pace = num(t.pace);
+      });
+      if (fixed) saveToStorage('training', arr);
+      return fixed;
+    }
+
     // State
     let currentWeekOffset = 0;
     let currentFilter = 'all';
@@ -2424,6 +2440,8 @@
       renderAnalysis();
       loadWeekPlan();
       initCoach();
+      const fixedN = sanitizeTrainings();
+      if (fixedN) { loadTodayData(getDateStr()); showToast(`已自动修正 ${fixedN} 处数据格式`, 'success'); }
     });
 
     // Date Functions
@@ -2793,19 +2811,19 @@
       const dayList = trainings.filter(t => t.date === today);
       const todayTraining = dayList.length
         ? Object.assign({}, dayList[0], {
-            distance: dayList.reduce((s, t) => s + (t.distance || 0), 0),
-            duration: dayList.reduce((s, t) => s + (t.duration || 0), 0),
+            distance: dayList.reduce((s, t) => s + num(t.distance), 0),
+            duration: dayList.reduce((s, t) => s + num(t.duration), 0),
             hr: dayList.filter(t => t.hr).length ? Math.round(dayList.filter(t => t.hr).reduce((s, t) => s + t.hr, 0) / dayList.filter(t => t.hr).length) : null,
             type: dayList.map(t => t.type).join('＋'),
             _multi: dayList.length > 1
           })
         : null;
       if (todayTraining && todayTraining.distance && todayTraining.duration) {
-        todayTraining.pace = (todayTraining.duration / todayTraining.distance).toFixed(2);
+        todayTraining.pace = (num(todayTraining.duration) / num(todayTraining.distance)).toFixed(2);
       }
 
       if (todayTraining) {
-        document.getElementById('todayDistance').textContent = Math.round(todayTraining.distance * 100) / 100;
+        document.getElementById('todayDistance').textContent = Math.round(num(todayTraining.distance) * 100) / 100;
         document.getElementById('todayPace').textContent = todayTraining.pace || '--';
         document.getElementById('todayDuration').textContent = todayTraining.duration;
         document.getElementById('todayType').innerHTML = `
@@ -2834,8 +2852,8 @@
       // 今日总览：汇总当天所有填写内容（支持多条训练记录）
       const digest = [];
       if (dayList.length) {
-        const totKm = dayList.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
-        const totMin = dayList.reduce((s, t) => s + (t.duration || 0), 0);
+        const totKm = dayList.reduce((s, t) => s + num(t.distance) + num(t.warmupKm) + num(t.extraRunKm), 0);
+        const totMin = dayList.reduce((s, t) => s + num(t.duration), 0);
         digest.push(`🏃 今日合计 ${Math.round(totKm * 100) / 100}km · ${fmtDur(totMin) || '—'}（${dayList.length} 条）`);
         dayList.forEach(t => {
           let line = `　· ${t.type || '训练'} ${t.distance || 0}km`;
@@ -4755,15 +4773,15 @@
       const strTypeMap = {};
       const rows = dates.map((d, i) => {
         const dayRecs = trainings.filter(x => x.date === d);
-        if (dayRecs.length) totalKm += dayRecs.reduce((s, t) => s + (t.distance || 0) + (t.warmupKm || 0) + (t.extraRunKm || 0), 0);
+        if (dayRecs.length) totalKm += dayRecs.reduce((s, t) => s + num(t.distance) + num(t.warmupKm) + num(t.extraRunKm), 0);
         const dc = decoupling.find(x => x.date === d);
         const planRaw = (plan && plan.days && plan.days[i]) ? ((plan.daysRaw && plan.daysRaw[i]) || plan.days[i]) : '';
         const planCat = planRaw ? planCategoryShort(planRaw) : '';
         const planHasStr = /力量|技术/.test(planCat);
-        const totDist = dayRecs.reduce((s, t) => s + (t.distance || 0), 0);
-        const totDur = dayRecs.reduce((s, t) => s + (t.duration || 0), 0);
-        const totWarm = dayRecs.reduce((s, t) => s + (t.warmupKm || 0), 0);
-        const totExtraRun = dayRecs.reduce((s, t) => s + (t.extraRunKm || 0), 0);
+        const totDist = dayRecs.reduce((s, t) => s + num(t.distance), 0);
+        const totDur = dayRecs.reduce((s, t) => s + num(t.duration), 0);
+        const totWarm = dayRecs.reduce((s, t) => s + num(t.warmupKm), 0);
+        const totExtraRun = dayRecs.reduce((s, t) => s + num(t.extraRunKm), 0);
         const hrRecs = dayRecs.filter(t => t.hr);
         const hrAvg = hrRecs.length ? Math.round(hrRecs.reduce((s, t) => s + t.hr, 0) / hrRecs.length) : null;
         const dayNotesAll = JSON.parse(localStorage.getItem('marathon_day_notes') || '{}');
@@ -4869,9 +4887,17 @@
     }
     function startEditWeekCell(date, field) {
       weeklyEditing = { date, field };
+      const scroller = document.querySelector('#tab-weekly .card[style*="overflow-x"]') || document.querySelector('#tab-weekly .card');
+      const keepScroll = scroller ? scroller.scrollLeft : 0;
       renderWeekly(weeklyOffset);
+      const sc = document.querySelector('#tab-weekly .card[style*="overflow-x"]') || document.querySelector('#tab-weekly .card');
+      if (sc) sc.scrollLeft = keepScroll;
       const ta = document.getElementById('wkCellEdit');
-      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+        try { ta.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }); } catch (e) { ta.scrollIntoView(); }
+      }
     }
     function cancelEditWeekCell() {
       weeklyEditing = null;
@@ -4959,7 +4985,8 @@
         : (stale ? ' <span style="color:var(--accent);font-size:11px" title="系统数据已更新，点开可替换">⟳</span>'
                  : ' <span style="color:var(--secondary);font-size:10px" title="已手动修改">✎</span>');
       const body = htmlText || '<span style="color:var(--surface-lighter)">点击编辑…</span>';
-      return `<td style="cursor:pointer;min-width:140px" onclick="startEditWeekCell('${x.dateRaw}','${field}')" title="点击编辑">${body}${mark}</td>`;
+      return `<td style="cursor:pointer;min-width:140px;position:relative" onclick="startEditWeekCell('${x.dateRaw}','${field}')" title="点击编辑">
+        <span style="position:absolute;top:4px;right:6px;font-size:10px;opacity:.45">✏️</span>${body}${mark}</td>`;
     }
 
     function renderWeekly(offset = 0) {
