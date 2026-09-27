@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.22.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.23.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2018,11 +2018,14 @@
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="exportAllData()">📤 备份数据（复制）</button>
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="toggleImportBox()">📥 恢复数据（粘贴）</button>
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="dataHealthCheck()">🩺 数据体检</button>
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="forceRefreshApp()">🔄 强制刷新应用</button>
         </div>
         <div id="importBox" style="display:none;margin-bottom:12px">
           <textarea class="form-input" id="importText" rows="4" placeholder="把备份的 JSON 粘贴到这里"></textarea>
           <button class="dc-btn" style="margin-top:8px" onclick="importAllData()">确认恢复</button>
         </div>
+        <div id="healthBox" style="display:none;margin-bottom:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--surface-lighter);border-radius:10px;font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-all"></div>
         <div id="recordsList"></div>
       </div>
 
@@ -2844,7 +2847,7 @@
       if (todayTraining) {
         document.getElementById('todayDistance').textContent = Math.round(num(todayTraining.distance) * 100) / 100;
         document.getElementById('todayPace').textContent = todayTraining.pace || '--';
-        document.getElementById('todayDuration').textContent = todayTraining.duration;
+        document.getElementById('todayDuration').textContent = Math.round(num(todayTraining.duration));
         document.getElementById('todayType').innerHTML = `
           <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/></svg>
           ${todayTraining.type}${todayTraining._multi ? `（${dayList.length}条）` : ''}
@@ -4325,6 +4328,55 @@
         navigator.clipboard.writeText(url).then(done).catch(done);
       } else { done(); }
     }
+    // 数据体检：直接扫原始存储，找出被存成字符串的数值字段并修复
+    function dataHealthCheck() {
+      const keys = [['marathon_training_records', ['distance','duration','hr','rpe','strengthDuration','strengthHr','warmupKm','extraRunKm','pace']],
+                    ['marathon_recovery_records', ['fatigue','sleepQuality','sleepHours','restingHR','hrv']],
+                    ['marathon_body_records', ['weight','morningWeight','eveningWeight']],
+                    ['marathon_injury_records', ['severity']]];
+      const issues = [];
+      let fixed = 0;
+      keys.forEach(([storeKey, fields]) => {
+        let arr;
+        try { arr = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch (e) { return; }
+        if (!Array.isArray(arr)) return;
+        arr.forEach(r => fields.forEach(k => {
+          if (r && r[k] !== undefined && r[k] !== null && typeof r[k] !== 'number') {
+            issues.push(`${r.date || '?'} ${r.type || r.bodyPart || ''}：${k} = "${String(r[k]).slice(0, 30)}"（${typeof r[k]}）`);
+            r[k] = num(r[k]); fixed++;
+          }
+        }));
+        if (fixed) localStorage.setItem(storeKey, JSON.stringify(arr));
+      });
+      const report = fixed
+        ? `🩺 体检结果：发现并修复 ${fixed} 处异常字段\n${issues.slice(0, 15).join('\n')}${issues.length > 15 ? `\n…共 ${issues.length} 处` : ''}`
+        : '🩺 体检通过：所有数值字段类型正常，没有发现异常 ✅';
+      const box = document.getElementById('healthBox');
+      if (box) { box.style.display = 'block'; box.textContent = report + '\n（长按可复制这段报告）'; }
+      loadTodayData(getRecordDate()); loadRecords(); loadWeekPlan(); renderAnalysis();
+      const wkTab = document.getElementById('tab-weekly');
+      if (wkTab && wkTab.classList.contains('active')) renderWeekly(weeklyOffset);
+      showToast(fixed ? `已修复 ${fixed} 处数据异常` : '体检通过，无异常', 'success');
+    }
+
+    // 强制刷新：注销 Service Worker + 清缓存 + 带时间戳重载（解决旧版本缓存）
+    async function forceRefreshApp() {
+      showToast('正在清理缓存并更新…', 'success');
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        if (window.caches) {
+          const ks = await caches.keys();
+          await Promise.all(ks.map(k => caches.delete(k)));
+        }
+      } catch (e) { console.error(e); }
+      setTimeout(() => {
+        location.replace(location.origin + location.pathname + '?fresh=' + Date.now());
+      }, 600);
+    }
+
     function exportAllData() {
       const keys = ['marathon_training_records', 'marathon_injury_records', 'marathon_recovery_records',
         'marathon_mental_records', 'marathon_diet_records', 'marathon_body_records', 'marathon_goals',
