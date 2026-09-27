@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.23.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.24.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2183,6 +2183,20 @@
         </div>
       </div>
     </main>
+
+    <!-- 周报单元格编辑弹窗 -->
+    <div id="wkCellModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.65);padding:18px;align-items:center;justify-content:center">
+      <div style="background:var(--surface);border:1px solid var(--surface-lighter);border-radius:14px;padding:16px;width:100%;max-width:440px;max-height:86vh;overflow:auto">
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:10px" id="wkCellTitle">编辑</div>
+        <textarea id="wkCellModalText" class="form-input" rows="8" style="font-size:13px"></textarea>
+        <div id="wkCellModalHint" style="font-size:11.5px;color:var(--text-secondary);margin-top:10px;line-height:1.7;white-space:pre-wrap"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="dc-btn" onclick="saveWeekCellModal()">保存</button>
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text)" onclick="closeWeekCellModal()">取消</button>
+          <button class="dc-btn" id="wkCellRestoreBtn" style="display:none;background:rgba(255,107,53,.2);color:#FFB08A" onclick="restoreWeekCellFromModal()">恢复自动生成</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Toast -->
     <div class="toast" id="toast">
@@ -4974,9 +4988,7 @@
       weeklyEditing = null;
       renderWeekly(weeklyOffset);
     }
-    function saveWeekCell(date, field) {
-      const ta = document.getElementById('wkCellEdit');
-      const text = ta ? ta.value.trim() : '';
+    function saveWeekCellText(date, field, text) {
       // 记录当前系统自动值作为 base（之后系统数据变化即可提示过期）
       const w = collectWeeklyData();
       const rowObj = w.rows.find(r => r.dateRaw === date);
@@ -5040,24 +5052,56 @@
       showToast('已恢复自动生成', 'success');
     }
     function wkCell(x, field, rawText, htmlText) {
-      const editing = weeklyEditing && weeklyEditing.date === x.dateRaw && weeklyEditing.field === field;
       const ov = (weekOverrides()[x.dateRaw] || {})[field];
-      if (editing) {
-        return `<td style="min-width:150px">
-          <textarea id="wkCellEdit" class="form-input" rows="4" placeholder="编辑…" onclick="event.stopPropagation()">${(rawText || '').replace(/</g, '&lt;')}</textarea>
-          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-            <button class="dc-btn" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();saveWeekCell('${x.dateRaw}','${field}')">保存</button>
-            <button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="event.stopPropagation();cancelEditWeekCell()">取消</button>
-            ${ov !== undefined ? `<button class="dc-btn" style="background:${stale ? 'var(--accent)' : 'rgba(255,107,53,.2)'};${stale ? '' : 'color:#FFB08A;'}font-size:11px;padding:4px 10px" onclick="event.stopPropagation();clearWeekOverride('${x.dateRaw}','${field}')">${stale ? '⟳ 用最新数据替换' : '恢复自动'}</button>` : ''}
-          </div></td>`;
-      }
       const stale = ovIsStale(x, field, ov);
       const mark = ov === undefined ? ''
-        : (stale ? ' <span style="color:var(--accent);font-size:11px" title="系统数据已更新，点开可替换">⟳</span>'
-                 : ' <span style="color:var(--secondary);font-size:10px" title="已手动修改">✎</span>');
+        : (stale
+            ? ' <span style="color:var(--accent);font-size:11px" title="你手动改过，之后系统数据又有更新">⟳数据已更新</span>'
+            : ' <span style="color:var(--secondary);font-size:10px" title="已手动修改">✎已手改</span>');
       const body = htmlText || '<span style="color:var(--surface-lighter)">点击编辑…</span>';
       return `<td style="cursor:pointer;min-width:140px;position:relative" onclick="startEditWeekCell('${x.dateRaw}','${field}')" title="点击编辑">
         <span style="position:absolute;top:4px;right:6px;font-size:10px;opacity:.45">✏️</span>${body}${mark}</td>`;
+    }
+
+    // 周报单元格：弹窗编辑（手机窄屏下比内嵌输入框可靠）
+    let weekCellCtx = null;
+    function startEditWeekCell(date, field) {
+      const w = collectWeeklyData();
+      const x = w.rows.find(r => r.dateRaw === date) || { autoVals: {} };
+      const ov = (weekOverrides()[date] || {})[field];
+      const cur = ovValue(ov) !== undefined ? ovValue(ov) : ((x.autoVals || {})[field] || '');
+      weekCellCtx = { date, field, hasOverride: ov !== undefined, stale: ovIsStale(x, field, ov) };
+      const titles = { plan: '训练计划内容', actual: '实际完成情况', extra: '额外训练', notes: '训练感受' };
+      document.getElementById('wkCellTitle').textContent = '编辑 · ' + (titles[field] || field) + '（' + date + '）';
+      const ta = document.getElementById('wkCellModalText');
+      ta.value = cur;
+      let hint = '保存后会标记为「已手改」；系统数据再次变化时会提示「⟳数据已更新」。';
+      if (field === 'actual') hint += '\n若文本含 距离km / 用时 / 均心率，会**回写到当天的训练记录**并重算跑量与配速。';
+      if (field === 'notes') hint += '\n当天只有一条记录时，感受会同步写回记录页。';
+      if (weekCellCtx.stale) hint = '⚠️ 你之前手改过这一格，之后系统数据又有更新。可以直接「⟳ 用最新数据替换」。\n' + hint;
+      document.getElementById('wkCellModalHint').textContent = hint;
+      const rbtn = document.getElementById('wkCellRestoreBtn');
+      rbtn.style.display = ov !== undefined ? 'inline-block' : 'none';
+      rbtn.textContent = weekCellCtx.stale ? '⟳ 用最新数据替换' : '恢复自动生成';
+      document.getElementById('wkCellModal').style.display = 'flex';
+      setTimeout(() => ta.focus(), 120);
+    }
+    function closeWeekCellModal() {
+      document.getElementById('wkCellModal').style.display = 'none';
+      weekCellCtx = null;
+    }
+    function saveWeekCellModal() {
+      if (!weekCellCtx) return;
+      const text = document.getElementById('wkCellModalText').value.trim();
+      const { date, field } = weekCellCtx;
+      closeWeekCellModal();
+      saveWeekCellText(date, field, text);
+    }
+    function restoreWeekCellFromModal() {
+      if (!weekCellCtx) return;
+      const { date, field } = weekCellCtx;
+      closeWeekCellModal();
+      clearWeekOverride(date, field);
     }
 
     function renderWeekly(offset = 0) {
