@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.25.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.26.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -2021,6 +2021,15 @@
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="toggleImportBox()">📥 恢复数据（粘贴）</button>
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="dataHealthCheck()">🩺 数据体检</button>
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="forceRefreshApp()">🔄 强制刷新应用</button>
+          <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px;padding:6px 12px" onclick="toggleInboxBox()">📨 导入码</button>
+        </div>
+        <div id="inboxBox" style="display:none;margin-bottom:12px">
+          <input type="text" class="form-input" id="inboxCode" inputmode="numeric" maxlength="6" placeholder="6 位导入码（bot 发给你，10 分钟内有效）">
+          <input type="text" class="form-input" id="inboxUrl" style="margin-top:8px" placeholder="收件箱地址（深链导入可留空）">
+          <button class="dc-btn" style="margin-top:8px" onclick="submitInboxCode()">导入</button>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;line-height:1.6">
+            也可直接用 bot 发来的链接打开三本账，记录会自动导入
+          </div>
         </div>
         <div id="importBox" style="display:none;margin-bottom:12px">
           <textarea class="form-input" id="importText" rows="4" placeholder="把备份的 JSON 粘贴到这里"></textarea>
@@ -4737,6 +4746,135 @@
 
     document.addEventListener('DOMContentLoaded', () => { setTimeout(() => autoSyncWatchData(), 2500); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) autoSyncWatchData(); });
+
+    // —— bot 入口：深链 / 兑换码导入（v1.26） ——
+    // bot 在服务器上，写不进手机浏览器的 localStorage；
+    // 所以 bot 只生成「链接」或「6 位码」，由 app 自己落库。
+    const INBOUND_TYPES = ['长跑', 'E跑', '间歇跑', '节奏跑', '力量训练', '交叉训练', '休息日'];
+
+    function getInboxCfg() { try { return JSON.parse(localStorage.getItem('sbz_inbox') || '{}'); } catch (e) { return {}; } }
+
+    function decodeInboundPayload(str) {
+      try {
+        const b = String(str).replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b + '='.repeat((4 - (b.length % 4)) % 4);
+        const bin = atob(pad);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+      } catch (e) { return null; }
+    }
+
+    function normalizeInbound(r) {
+      if (!r || typeof r !== 'object') return null;
+      const date = String(r.d || r.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+      let type = String(r.t || r.type || 'E跑');
+      if (INBOUND_TYPES.indexOf(type) < 0) type = 'E跑';
+      const dist = num(r.k !== undefined ? r.k : r.distance);
+      const dur = num(r.m !== undefined ? r.m : r.duration);
+      const hr = num(r.h !== undefined ? r.h : r.hr);
+      if (!dist && !dur) return null;
+      return { date: date, type: type, distance: dist, duration: dur, hr: hr || null, note: String(r.n || r.notes || '') };
+    }
+
+    function importInboundRecords(payload) {
+      const list = Array.isArray(payload) ? payload
+        : (payload && Array.isArray(payload.r)) ? payload.r
+        : (payload && Array.isArray(payload.records)) ? payload.records
+        : (payload ? [payload] : []);
+      const trainings = loadFromStorage('training');
+      let added = 0, dupCount = 0;
+      list.forEach(raw => {
+        const r = normalizeInbound(raw);
+        if (!r) return;
+        const isStr = r.type === '力量训练';
+        const dup = trainings.some(t => t.date === r.date &&
+          Math.abs((t.distance || 0) - r.distance) < 0.05 &&
+          Math.abs((t.duration || 0) - r.duration) < 1);
+        if (dup) { dupCount++; return; }
+        trainings.push({
+          id: generateId(), date: r.date, type: r.type,
+          distance: isStr ? 0 : r.distance, duration: r.duration,
+          pace: (!isStr && r.distance && r.duration) ? (r.duration / r.distance).toFixed(2) : 0,
+          rpe: 3, hr: r.hr, completion: '按计划完成',
+          extra: isStr ? '力量训练' : '', strengthDuration: isStr ? r.duration : 0,
+          strengthHr: isStr ? r.hr : null, warmupKm: 0, extraRunKm: 0, weather: '',
+          notes: (r.note ? r.note + '（bot 导入）' : 'bot 导入'), botImported: true
+        });
+        added++;
+      });
+      if (added) {
+        saveToStorage('training', trainings);
+        renderWeekly(weeklyOffset);
+        loadTodayData(getRecordDate());
+        loadRecords();
+      }
+      importInboundRecords._dup = dupCount;
+      return added;
+    }
+
+    async function claimInboundCode(code) {
+      const cfg = getInboxCfg();
+      const base = String(cfg.url || '').replace(/\/+$/, '');
+      if (!base) { showToast('还没填收件箱地址（点「📨 导入码」里填一次）', 'error'); return; }
+      if (!/^\d{4,8}$/.test(String(code))) { showToast('导入码应该是 6 位数字', 'error'); return; }
+      try {
+        const res = await fetch(base + '/claim?code=' + encodeURIComponent(code));
+        if (!res.ok) { showToast('导入码无效或已过期', 'error'); return; }
+        const data = await res.json();
+        const added = importInboundRecords(data);
+        showToast(added ? `已导入 ${added} 条记录` : '这条记录已存在，没有重复导入', added ? 'success' : 'error');
+      } catch (e) {
+        showToast('连不上收件箱，检查网络和地址', 'error');
+      }
+    }
+
+    function toggleInboxBox() {
+      const box = document.getElementById('inboxBox');
+      if (!box) return;
+      const cfg = getInboxCfg();
+      const u = document.getElementById('inboxUrl');
+      if (u && cfg.url) u.value = cfg.url;
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      if (box.style.display === 'block') {
+        const c = document.getElementById('inboxCode');
+        if (c) c.focus();
+      }
+    }
+
+    function submitInboxCode() {
+      const cfg = getInboxCfg();
+      const u = (document.getElementById('inboxUrl') || {}).value || '';
+      if (u.trim()) { cfg.url = u.trim(); localStorage.setItem('sbz_inbox', JSON.stringify(cfg)); }
+      const c = ((document.getElementById('inboxCode') || {}).value || '').trim();
+      if (!c) { showToast('先填 6 位导入码', 'error'); return; }
+      claimInboundCode(c);
+    }
+
+    // 打开 app 时检查 URL：/…/#in=<payload>（深链）或 /…/#claim=123456（码）
+    function checkInboundFromUrl() {
+      const raw = (location.hash || '') + '&' + (location.search || '');
+      let hit = false;
+      const mIn = raw.match(/[#?&]in=([^&]+)/);
+      const mClaim = raw.match(/[#?&]claim=(\d{4,8})/);
+      if (mIn) {
+        hit = true;
+        const payload = decodeInboundPayload(decodeURIComponent(mIn[1]));
+        if (payload) {
+          const added = importInboundRecords(payload);
+          showToast(added ? `链接导入成功：${added} 条记录` : '记录已存在，没有重复导入', added ? 'success' : 'error');
+        } else {
+          showToast('链接格式不对，导入失败', 'error');
+        }
+      } else if (mClaim) {
+        hit = true;
+        claimInboundCode(mClaim[1]);
+      }
+      if (hit) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { setTimeout(checkInboundFromUrl, 1200); });
 
     // —— FIT / TCX / GPX 文件导入 ——
     function buildPairsFromLaps(laps) {
