@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.24.1</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.25.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1639,8 +1639,9 @@
           <div id="intervalsSetup" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:10px">
             <input type="text" class="form-input" id="intervalsKey" placeholder="粘贴 Intervals.icu API Key">
             <div style="font-size:11.5px;color:var(--text-secondary);margin-top:8px;line-height:1.7">
-              ① 注册 intervals.icu（免费）→ Settings → <b>Connections</b> 绑定 COROS 或 Garmin（手表训练自动同步）<br>
-              ② Settings → <b>Developer</b> → 复制 API Key 粘贴到上面 → 保存并测试
+              ① 注册 intervals.icu（免费）→ Settings → <b>Connections</b> 绑定 COROS（佳明国行账号连不上 ICU，由 Mac mini 同步脚本转存）<br>
+              ② Settings → <b>Developer</b> → 复制 API Key 粘贴到上面 → 保存并测试<br>
+              ③ 保存后<b>每次打开 App 自动同步最近 14 天</b>（同一次课双表只留一条，另一块表的数据写进备注）
             </div>
             <button class="dc-btn" style="margin-top:10px" onclick="saveIntervalsKey()">保存并测试</button>
           </div>
@@ -4621,6 +4622,121 @@
       loadWeekPlan();
       showToast(`同步完成：新增 ${added} 条记录${skipped ? `，跳过重复 ${skipped} 条` : ''}`, 'success');
     }
+
+    // —— 开屏自动同步：手表数据静默入库（COROS / 佳明，双表自动去重） ——
+    const AUTO_SYNC_DAYS = 14;               // 回看天数
+    const AUTO_SYNC_MIN_MS = 30 * 60 * 1000; // 30 分钟内不重复拉
+
+    function autoSyncStampMs() { return parseInt(localStorage.getItem('sbz_auto_sync_at') || '0', 10) || 0; }
+    function autoSyncDue() { return Date.now() - autoSyncStampMs() >= AUTO_SYNC_MIN_MS; }
+
+    function quietIntervalsFetch(oldest, newest) {
+      const cfg = getIntervalsCfg();
+      if (!cfg.key) return Promise.resolve(null);
+      return fetch(`https://intervals.icu/api/v1/athlete/0/activities?oldest=${oldest}&newest=${newest}`, {
+        headers: { Authorization: 'Basic ' + btoa('API_KEY:' + cfg.key) }
+      }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    }
+
+    // 同一次课的判定：开始时间差 <30 分钟且距离差 <0.5km（两块表各记一条时用）
+    function isSameSession(a, b) {
+      const ta = new Date(a.start_date_local), tb = new Date(b.start_date_local);
+      if (isNaN(ta) || isNaN(tb)) return false;
+      const dtMin = Math.abs(ta - tb) / 60000;
+      const dDistKm = Math.abs((a.distance || 0) - (b.distance || 0)) / 1000;
+      return dtMin < 30 && dDistKm < 0.5;
+    }
+
+    // 按天整理：同一天同一次课只留一条（距离长的优先），另一块表的数据塞进备注
+    function pickSessions(acts) {
+      const byDate = {};
+      acts.forEach(a => {
+        const d = (a.start_date_local || '').slice(0, 10);
+        if (d && (a.distance || a.moving_time || a.elapsed_time)) (byDate[d] = byDate[d] || []).push(a);
+      });
+      const out = [];
+      Object.keys(byDate).sort().forEach(d => {
+        const picked = [];
+        byDate[d].slice()
+          .sort((x, y) => (y.distance || 0) - (x.distance || 0))
+          .forEach(a => {
+            const twin = picked.find(p => isSameSession(p, a));
+            if (twin) {
+              const lost = intervalsToRecord(a);
+              if (lost.distance || lost.duration) {
+                twin._alt = `${a.source || '另一块表'} ${lost.distance ? lost.distance + 'km' : ''}${lost.duration ? ' ' + lost.duration + 'min' : ''}${lost.hr ? ' 均心率' + lost.hr : ''}`.trim();
+              }
+              return;
+            }
+            picked.push(a);
+          });
+        picked.forEach(a => out.push({ date: d, act: a }));
+      });
+      return out;
+    }
+
+    function mergeIntoTraining(acts) {
+      const trainings = loadFromStorage('training');
+      let added = 0;
+      pickSessions(acts).forEach(pair => {
+        const date = pair.date, act = pair.act;
+        const r = intervalsToRecord(act);
+        if (!r.distance && !r.duration) return;
+        const isStr = r.type === '力量训练';
+        // 已有记录（手填或之前同步过的）近似 → 跳过，不覆盖手填
+        const dup = trainings.some(t => t.date === date &&
+          Math.abs((t.distance || 0) - (r.distance || 0)) < 0.5 &&
+          Math.abs((t.duration || 0) - (r.duration || 0)) < 5);
+        if (dup) return;
+        let note = r.narrative || '';
+        if (act._alt) note += (note ? '；' : '') + `另一块表：${act._alt}`;
+        trainings.push({
+          id: generateId(), date,
+          type: r.type,
+          distance: isStr ? 0 : (r.distance || 0),
+          duration: r.duration || 0,
+          pace: (!isStr && r.distance && r.duration) ? (r.duration / r.distance).toFixed(2) : 0,
+          rpe: 3, hr: r.hr || null,
+          completion: '按计划完成',
+          extra: isStr ? (act.name || '力量训练') : '',
+          strengthDuration: isStr ? (r.duration || 0) : 0,
+          strengthHr: isStr ? (r.hr || null) : null,
+          warmupKm: 0, extraRunKm: 0, weather: '', notes: note,
+          autoSynced: true
+        });
+        added++;
+      });
+      if (added) saveToStorage('training', trainings);
+      return added;
+    }
+
+    async function autoSyncWatchData(force) {
+      if (autoSyncWatchData._busy) return 0;
+      if (!force && !autoSyncDue()) return 0;
+      autoSyncWatchData._busy = true;
+      try {
+        const newest = getDateStr();
+        const oldest = getDateStr(new Date(Date.now() - (AUTO_SYNC_DAYS - 1) * 86400000));
+        const acts = await quietIntervalsFetch(oldest, newest);
+        localStorage.setItem('sbz_auto_sync_at', String(Date.now()));
+        if (!acts || !acts.length) return 0;
+        const added = mergeIntoTraining(acts);
+        if (added > 0) {
+          renderWeekly(weeklyOffset);
+          loadTodayData(getRecordDate());
+          showToast(`已自动同步 ${added} 条手表记录`, 'success');
+        }
+        return added;
+      } catch (e) {
+        console.warn('[autoSync] 失败', e);
+        return 0;
+      } finally {
+        autoSyncWatchData._busy = false;
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { setTimeout(() => autoSyncWatchData(), 2500); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) autoSyncWatchData(); });
 
     // —— FIT / TCX / GPX 文件导入 ——
     function buildPairsFromLaps(laps) {
