@@ -1501,7 +1501,7 @@
         </div>
         <span class="logo-text">三本账</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:10px;font-weight:500">后半程不撞墙</span>
-        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.26.0</span>
+        <span style="font-size:10px;color:var(--surface-lighter);margin-left:6px">v1.27.0</span>
       </div>
       <span class="header-date" id="currentDate"></span>
     </header>
@@ -1633,6 +1633,7 @@
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="dc-btn" style="background:var(--primary)" onclick="syncIntervalsDay()">🔄 同步手表数据</button>
             <button class="dc-btn" style="background:var(--accent)" onclick="document.getElementById('trackFileInput').click()">📄 导入 FIT/TCX/GPX</button>
+            <button class="dc-btn" style="background:var(--warning);color:#0F172A" onclick="openManualRecord()">✍️ 手动录入</button>
             <button class="dc-btn" style="background:var(--surface-light);color:var(--text-secondary);font-size:12px" onclick="toggleIntervalsSetup()">⚙️ 连接设置</button>
           </div>
           <input type="file" id="trackFileInput" accept=".fit,.tcx,.gpx" style="display:none" onchange="handleTrackFile(this)">
@@ -2204,6 +2205,47 @@
           <button class="dc-btn" onclick="saveWeekCellModal()">保存</button>
           <button class="dc-btn" style="background:var(--surface-light);color:var(--text)" onclick="closeWeekCellModal()">取消</button>
           <button class="dc-btn" id="wkCellRestoreBtn" style="display:none;background:rgba(255,107,53,.2);color:#FFB08A" onclick="restoreWeekCellFromModal()">恢复自动生成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 手动录入弹窗（按跑步类别分字段 · v1.27） -->
+    <div id="manualModal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.65);padding:12px;overflow-y:auto">
+      <style>
+        #manualModal .mm-card{background:var(--surface);border:1px solid var(--surface-lighter);border-radius:16px;width:100%;max-width:520px;margin:18px auto;overflow:hidden}
+        #manualModal .mm-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--surface-light);position:sticky;top:0;background:var(--surface);z-index:2}
+        #manualModal .mm-body{padding:14px 16px 18px}
+        #manualModal .mm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        #manualModal .mm-seg{background:var(--surface-light);border-radius:10px;padding:10px;margin-top:8px}
+        #manualModal .mm-seg-head{display:flex;gap:8px;align-items:center}
+        #manualModal .mm-seg .form-input{font-size:13px;padding:8px 10px}
+        #manualModal .mm-del{background:rgba(239,68,68,.18);color:#FCA5A5;border:none;border-radius:8px;width:28px;height:28px;font-size:14px;cursor:pointer;flex-shrink:0}
+        #manualModal .mm-add{display:block;background:var(--surface-lighter);border:none;color:var(--text-secondary);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;margin-top:8px;width:100%;text-align:center}
+        #manualModal .mm-sum{background:rgba(0,210,106,.08);border:1px solid rgba(0,210,106,.28);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.75}
+        #manualModal .mm-hint{font-size:11.5px;color:var(--text-secondary);margin-top:6px;line-height:1.65}
+        #manualModal .mm-plan{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:9px 12px;font-size:12px;line-height:1.6;margin-bottom:10px}
+        #manualModal .form-label{font-size:12px;margin-bottom:4px;display:block;color:var(--text-secondary)}
+        #manualModal .form-input{width:100%;padding:10px 12px;font-size:13.5px}
+        #manualModal .form-group{margin-bottom:8px}
+        @media(max-width:420px){#manualModal .mm-grid2{grid-template-columns:1fr}}
+      </style>
+      <div class="mm-card">
+        <div class="mm-head">
+          <div style="font-size:15px;font-weight:700">✍️ 手动录入训练</div>
+          <button type="button" class="mm-del" style="width:30px;height:30px" onclick="closeManualRecord()">✕</button>
+        </div>
+        <div class="mm-body">
+          <div id="mPlanHint"></div>
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">日期</label><input type="date" class="form-input" id="mDate" onchange="mPlanHint(this.value)"></div>
+            <div class="form-group"><label class="form-label">训练类型</label><select class="form-input" id="mType" onchange="manualTypeChanged()"></select></div>
+          </div>
+          <div id="mTypeFields"></div>
+          <div style="display:flex;gap:10px;margin-top:16px">
+            <button type="button" class="dc-btn" style="flex:1;background:var(--primary);justify-content:center" onclick="saveManualRecord()">保存记录</button>
+            <button type="button" class="dc-btn" style="background:var(--surface-light);color:var(--text)" onclick="closeManualRecord()">取消</button>
+          </div>
+          <div class="mm-hint" style="margin-top:10px">距离 / 时长 / 配速填任意两项自动算第三项；组块可「＋」加、「×」删。识别图片/同步手表后也可以用这里补改。</div>
         </div>
       </div>
     </div>
@@ -4201,6 +4243,7 @@
               ${num(t.strengthDuration) ? `<br>💪 力量 ${num(t.strengthDuration)}min` : ''}
               ${num(t.extraRunKm) ? `<br>➕ 额外跑 ${num(t.extraRunKm)}km` : ''}
               ${num(t.warmupKm) ? `<br>热身冷身 ${num(t.warmupKm)}km` : ''}
+              ${(t.segments && t.segments.length) ? `<br><span style="color:var(--text-secondary)">⏱ ${t.segments.map(sg => `${sg.spec || ''}${sg.paces ? ' @' + sg.paces : ''}`).join(' ｜ ')}</span>` : ''}
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0">
               <button class="dc-btn" style="background:var(--surface-lighter);font-size:11px;padding:5px 10px" onclick="startEditRecord('${t.id}')">编辑</button>
@@ -4210,32 +4253,8 @@
     }
 
     function startEditRecord(id) {
-      const t = loadFromStorage('training').find(x => x.id === id);
-      if (!t) return;
-      editingRecordId = id;
-      const set = (k, v) => { document.getElementById(k).value = v; };
-      set('trainingType', t.type === '未分类' ? '' : (t.type || ''));
-      set('trainingDistance', t.distance || '');
-      set('trainingDuration', t.duration || '');
-      set('trainingHr', t.hr || '');
-      set('trainingRpe', t.rpe || 3);
-      document.getElementById('rpeValue').textContent = t.rpe || 3;
-      set('trainingCompletion', t.completion || '按计划完成');
-      set('trainingExtra', t.extra || '');
-      set('strengthDuration', t.strengthDuration || '');
-      set('strengthHr', t.strengthHr || '');
-      set('warmupKm', t.warmupKm || '');
-      set('extraRunKm', t.extraRunKm || '');
-      set('trainingWeather', t.weather || '');
-      set('trainingNotes', t.notes || '');
-      if (t.date && t.date !== getRecordDate()) setRecordDate(t.date);
-      const eb = document.getElementById('editBanner');
-      if (eb) {
-        eb.style.display = 'block';
-        eb.innerHTML = `✏️ 正在编辑「${t.type || '训练'} ${t.distance || 0}km」——保存将更新这条记录　<button class="dc-btn" style="background:var(--surface-light);color:var(--text);font-size:11px;padding:4px 10px" onclick="cancelEditRecord()">取消编辑</button>`;
-      }
-      renderAutoSummary();
-      showToast('已载入这条记录，改完点保存', 'success');
+      // v1.27 起改用手动录入弹窗编辑：分段/组块/自定义项都能改，保存按 id 更新
+      openManualRecord(id);
     }
 
     function cancelEditRecord() {
@@ -4407,7 +4426,7 @@
         'marathon_week_plan', 'marathon_decoupling_records', 'marathon_weekly_reports', 'marathon_plan_done', 'marathon_day_notes', 'marathon_week_overrides'];
       const data = {};
       keys.forEach(k => { const v = localStorage.getItem(k); if (v) { try { data[k] = JSON.parse(v); } catch (e) { data[k] = v; } } });
-      const json = JSON.stringify({ app: '三本账', version: 'v1.13.1', exportedAt: new Date().toISOString(), data }, null, 1);
+      const json = JSON.stringify({ app: '三本账', version: 'v1.27.0', exportedAt: new Date().toISOString(), data }, null, 1);
       const done = () => showToast('备份已复制，粘贴到备忘录/微信收藏保存', 'success');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(json).then(done).catch(() => { prompt('长按复制以下内容：', json); });
@@ -4630,6 +4649,619 @@
       loadTodayData(getRecordDate());
       loadWeekPlan();
       showToast(`同步完成：新增 ${added} 条记录${skipped ? `，跳过重复 ${skipped} 条` : ''}`, 'success');
+    }
+
+    /* ================= 手动录入：按跑步类别分字段（v1.27） ================= */
+    // 设计：距离 / 时长 / 配速 三者互算；间歇·节奏·变速 = 组块（组块描述 × 组数 + 逐组配速）
+    const MANUAL_TYPES = ['E跑', '长跑', '节奏跑', '间歇跑', '变速跑', '力量训练', '交叉训练', '热身/冷身', '休息日'];
+    const MANUAL_BLOCK_TYPES = ['间歇跑', '节奏跑', '变速跑'];
+    const MANUAL_RUN_TYPES = ['E跑', '长跑', '节奏跑', '间歇跑', '变速跑', '热身/冷身'];
+    let manualEditId = null;
+    let manualSegs = [];
+    let manualCustoms = [];
+
+    function mNum(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
+    function mRound2(v) { return Math.round(v * 100) / 100; }
+    function mEsc(v) { return String(v === undefined || v === null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+    function mPaceStr(minPerKm) {
+      if (!minPerKm || !isFinite(minPerKm) || minPerKm <= 0) return '';
+      return secToPace(minPerKm * 60);
+    }
+    // 单个配速：4:05 / 4'05" / 4.08 / 3:59–4:05（取第一个）
+    function mParsePace(s) {
+      if (s === undefined || s === null || s === '') return 0;
+      const str = String(s).replace(/[’‘]/g, "'").replace(/[”"″]/g, '"').trim();
+      let m = str.match(/(\d{1,2})\s*[:'′]\s*(\d{1,2})/);
+      if (m) return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+      m = str.match(/(\d{1,3}(?:\.\d+)?)/);
+      return m ? parseFloat(m[1]) : 0;
+    }
+    // 多组配速：3:59/3:57 或 3:59、3:57 或 "3:59 3:57"
+    function mParsePaceList(s) {
+      if (!s) return [];
+      return String(s).split(/[\/、,，;；]+|\s+/).map(x => mParsePace(x)).filter(x => x > 0);
+    }
+    // 时长：62 / 62min / 1:16:14 / 76:14 / 1:16 → 分钟
+    function mParseMin(s) {
+      if (s === undefined || s === null || s === '') return 0;
+      const str = String(s).replace(/分钟|min/gi, '').trim();
+      if (!str) return 0;
+      if (str.indexOf(':') >= 0) {
+        const p = str.split(':').map(x => parseFloat(x));
+        if (p.length === 3) return p[0] * 60 + p[1] + p[2] / 60;
+        if (p.length === 2 && p[0] >= 10) return p[0] + p[1] / 60;
+        if (p.length === 2) return p[0] * 60 + p[1];
+        return 0;
+      }
+      return parseFloat(str) || 0;
+    }
+    // 组块描述：4k×2 / 400m×8 / 20min×2 / 2×20min / 800米×8
+    function mParseSpec(spec) {
+      const out = { reps: 0, distKm: 0, timeMin: 0, text: String(spec || '').trim() };
+      if (!out.text) return out;
+      const s = out.text.replace(/\s+/g, '').replace(/[xX*✕]/g, '×');
+      const parts = s.split('×');
+      if (parts.length !== 2) return out;
+      const parseTok = t => {
+        // 支持 mm:ss 时长写法（如 17:30×2）
+        const ms = t.match(/^(\d{1,3}):(\d{2})$/);
+        if (ms) return { v: parseInt(ms[1], 10) + parseInt(ms[2], 10) / 60, unit: 'min' };
+        const m = t.match(/^(\d+(?:\.\d+)?)(km|公里|千米|k|米|m|min|分钟|分|秒|s|')?$/i);
+        if (!m) return null;
+        const v = parseFloat(m[1]);
+        if (!isFinite(v) || v <= 0) return null;
+        const u = (m[2] || '').toLowerCase();
+        if (!u) return { v: v, unit: '' };
+        if (u === 'k' || u === 'km' || u === '公里' || u === '千米') return { v: v, unit: 'km' };
+        if (u === 'm' || u === '米') return { v: v, unit: 'm' };
+        if (u === 'min' || u === '分钟' || u === '分' || u === "'") return { v: v, unit: 'min' };
+        return { v: v, unit: 'sec' };
+      };
+      const a = parseTok(parts[0]), b = parseTok(parts[1]);
+      if (!a || !b) return out;
+      let specTok = null, repsTok = null;
+      if (a.unit && !b.unit) { specTok = a; repsTok = b; }
+      else if (!a.unit && b.unit) { repsTok = a; specTok = b; }
+      else if (!a.unit && !b.unit) { specTok = a; repsTok = b; }
+      else return out;
+      out.reps = Math.max(1, Math.round(repsTok.v));
+      if (specTok.unit === 'm') out.distKm = specTok.v / 1000;
+      else if (specTok.unit === 'min') out.timeMin = specTok.v;
+      else if (specTok.unit === 'sec') out.timeMin = specTok.v / 60;
+      else out.distKm = specTok.v;
+      return out;
+    }
+    // 组间休息：3min / 3' / 2:30 / 90s / 慢跑3分钟 → 分钟
+    function mParseRest(s) {
+      if (!s) return 0;
+      const str = String(s);
+      let m = str.match(/(\d+(?:\.\d+)?)\s*(?:min|分钟|分|′|')/i);
+      if (m) return parseFloat(m[1]);
+      m = str.match(/(\d+)\s*(?:s|秒)/i);
+      if (m) return parseFloat(m[1]) / 60;
+      m = str.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
+      if (m) return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+      m = str.match(/(\d+(?:\.\d+)?)/);
+      return m ? parseFloat(m[1]) : 0;
+    }
+    // 组块自动合计（写回每组 _calc）
+    function mSegCalc() {
+      let hardKm = 0, hardMin = 0, restMin = 0;
+      const allPaces = [];
+      manualSegs.forEach(sg => {
+        const spec = mParseSpec(sg.spec);
+        const paces = mParsePaceList(sg.paces);
+        const avgPace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 0;
+        const reps = spec.reps || 0;
+        let perKm = spec.distKm, perMin = spec.timeMin;
+        if (perKm && avgPace) perMin = perKm * avgPace;
+        else if (perMin && avgPace) perKm = perMin / avgPace;
+        const km = perKm && reps ? perKm * reps : 0;
+        const min = perMin && reps ? perMin * reps : 0;
+        hardKm += km; hardMin += min;
+        const rest = mParseRest(sg.rest);
+        restMin += rest * Math.max(0, reps - 1);
+        allPaces.push.apply(allPaces, paces);
+        sg._calc = { reps: reps, perKm: perKm, perMin: perMin, km: km, min: min, avgPace: avgPace, rest: rest };
+      });
+      return { hardKm: hardKm, hardMin: hardMin, restMin: restMin, allPaces: allPaces };
+    }
+    function mFirstLastDiff() {
+      const t = mSegCalc();
+      if (t.allPaces.length < 2) return null;
+      return { first: t.allPaces[0], last: t.allPaces[t.allPaces.length - 1], diff: t.allPaces[t.allPaces.length - 1] - t.allPaces[0] };
+    }
+
+    function manualRenderTypeOptions() {
+      const sel = document.getElementById('mType');
+      if (!sel) return;
+      sel.innerHTML = MANUAL_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+    }
+    function manualTypeChanged() {
+      const type = document.getElementById('mType').value;
+      manualSegs = [];
+      mRenderTypeFields(type);
+    }
+    function mRenderTypeFields(type) {
+      const box = document.getElementById('mTypeFields');
+      if (!box) return;
+      const triple = `
+        <div class="mm-grid2">
+          <div class="form-group"><label class="form-label">距离 km</label><input type="number" step="0.01" class="form-input" id="mDistance" inputmode="decimal" placeholder="如 14.28" oninput="mCalc(this,'distance')"></div>
+          <div class="form-group"><label class="form-label">时长（分钟）</label><input type="text" class="form-input" id="mDuration" inputmode="decimal" placeholder="如 76 或 1:16:14" oninput="mCalc(this,'duration')"></div>
+        </div>
+        <div class="form-group"><label class="form-label">配速 /km</label><input type="text" class="form-input" id="mPace" inputmode="decimal" placeholder="自动计算；也可手填 5:20" oninput="mCalc(this,'pace')"></div>`;
+      const hrRow = `
+        <div class="mm-grid2">
+          <div class="form-group"><label class="form-label">平均心率 bpm</label><input type="number" class="form-input" id="mHr" inputmode="numeric" placeholder="选填"></div>
+          <div class="form-group"><label class="form-label">最大心率 bpm</label><input type="number" class="form-input" id="mHrMax" inputmode="numeric" placeholder="选填"></div>
+        </div>`;
+      let html = '';
+      if (MANUAL_BLOCK_TYPES.indexOf(type) >= 0) {
+        const tip = type === '间歇跑' ? '距离型，如 4k×2、400m×8、800米×8' : type === '节奏跑' ? '时长型，如 20min×2、2×20min' : '快慢段，如 1km×8（快慢配速写在「实际配速」里）';
+        html += `<div style="font-size:12.5px;font-weight:700;margin:12px 0 2px">组块（${tip}）</div>
+          <div id="mSegList"></div>
+          <button type="button" class="mm-add" onclick="mAddSeg()">＋ 添加组块</button>
+          <div class="mm-grid2" style="margin-top:10px">
+            <div class="form-group"><label class="form-label">热身/放松 km</label><input type="number" step="0.01" class="form-input" id="mWarmKm" inputmode="decimal" oninput="mSegRefresh()"></div>
+            <div class="form-group"><label class="form-label">热身/放松 时长</label><input type="text" class="form-input" id="mWarmMin" inputmode="decimal" placeholder="选填，如 16" oninput="mSegRefresh()"></div>
+          </div>
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">额外跑量 km</label><input type="number" step="0.01" class="form-input" id="mExtraKm" inputmode="decimal" placeholder="选填" oninput="mSegRefresh()"></div>
+            <div class="form-group"><label class="form-label">组内平均心率</label><input type="number" class="form-input" id="mHr" placeholder="选填"></div>
+          </div>
+          <div class="form-group"><label class="form-label">最大心率</label><input type="number" class="form-input" id="mHrMax" placeholder="选填"></div>
+          <div id="mSegSum" class="mm-sum"></div>`;
+      } else if (type === '长跑') {
+        html += triple + hrRow + `
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">模式</label><select class="form-input" id="mLongMode"><option value="匀速">匀速</option><option value="末段加速">末段加速</option><option value="全程渐快">全程渐快</option><option value="掉速">掉速</option></select></div>
+            <div class="form-group"><label class="form-label">碳水 g/h</label><input type="number" class="form-input" id="mCarb" inputmode="numeric" placeholder="如 40" oninput="mLongHint()"></div>
+          </div>
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">起配速</label><input type="text" class="form-input" id="mPaceStart" placeholder="如 4:55" oninput="mLongHint()"></div>
+            <div class="form-group"><label class="form-label">末配速</label><input type="text" class="form-input" id="mPaceEnd" placeholder="如 4:40" oninput="mLongHint()"></div>
+          </div>
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">补给次数</label><input type="number" class="form-input" id="mFeeds" inputmode="numeric" placeholder="如 3" oninput="mLongHint()"></div>
+            <div class="form-group"><label class="form-label">肠胃反应</label><select class="form-input" id="mGut"><option value="">未记录</option><option>正常</option><option>轻微</option><option>明显</option></select></div>
+          </div>
+          <div id="mLongHint" class="mm-hint"></div>`;
+      } else if (type === 'E跑') {
+        html += triple + hrRow + `
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">心率上限 bpm</label><input type="number" class="form-input" id="mHrCeil" inputmode="numeric" placeholder="如 140"></div>
+            <div class="form-group"><label class="form-label">能聊天/鼻呼吸</label><select class="form-input" id="mTalk"><option value="">未记录</option><option>是</option><option>勉强</option><option>否</option></select></div>
+          </div>`;
+      } else if (type === '力量训练') {
+        html += `<div class="mm-grid2">
+            <div class="form-group"><label class="form-label">时长（分钟）</label><input type="number" class="form-input" id="mStrengthMin" inputmode="numeric" placeholder="如 60"></div>
+            <div class="form-group"><label class="form-label">平均心率</label><input type="number" class="form-input" id="mHr" placeholder="选填"></div>
+          </div>
+          <div class="form-group"><label class="form-label">内容（动作/部位）</label><input type="text" class="form-input" id="mContent" placeholder="如 核心40min＋臀中肌20min"></div>`;
+      } else if (type === '交叉训练') {
+        html += `<div class="mm-grid2">
+            <div class="form-group"><label class="form-label">项目</label><select class="form-input" id="mCrossType"><option>骑行</option><option>游泳</option><option>椭圆机</option><option>瑜伽</option><option>跑步机</option><option>其他</option></select></div>
+            <div class="form-group"><label class="form-label">时长（分钟）</label><input type="number" class="form-input" id="mStrengthMin" inputmode="numeric" placeholder="如 60"></div>
+          </div>
+          <div class="mm-grid2">
+            <div class="form-group"><label class="form-label">距离 km（选填）</label><input type="number" step="0.01" class="form-input" id="mDistance" inputmode="decimal"></div>
+            <div class="form-group"><label class="form-label">平均心率</label><input type="number" class="form-input" id="mHr" placeholder="选填"></div>
+          </div>`;
+      } else if (type === '热身/冷身') {
+        html += `<div class="mm-grid2">
+            <div class="form-group"><label class="form-label">距离 km</label><input type="number" step="0.01" class="form-input" id="mDistance" inputmode="decimal"></div>
+            <div class="form-group"><label class="form-label">时长（分钟）</label><input type="text" class="form-input" id="mDuration" inputmode="decimal"></div>
+          </div>`;
+      } else {
+        html += `<div class="mm-hint">休息日只需填备注（例如：全休 / 拉伸 / 游泳恢复）。</div>`;
+      }
+      html += `
+        <div class="mm-grid2" style="margin-top:12px">
+          <div class="form-group"><label class="form-label">体感 RPE（1–5）</label><input type="number" class="form-input" id="mRpe" min="1" max="5" step="1" value="3"></div>
+          <div class="form-group"><label class="form-label">完成度</label><select class="form-input" id="mCompletion"><option>按计划完成</option><option>超额完成</option><option>打折完成</option><option>未完成</option><option>临时调整</option></select></div>
+        </div>
+        <div class="mm-grid2">
+          <div class="form-group"><label class="form-label">天气</label><select class="form-input" id="mWeather"><option value="">不填</option><option>晴</option><option>阴</option><option>小雨</option><option>大雨</option><option>雪</option><option>高温</option><option>低温</option></select></div>
+          <div class="form-group" style="display:flex;align-items:flex-end"><button type="button" class="mm-add" style="margin:0" onclick="mAddCustom()">＋ 自定义项（可加减）</button></div>
+        </div>
+        <div id="mCustomList"></div>
+        <div class="form-group" style="margin-top:8px"><label class="form-label">备注</label><textarea class="form-input" id="mNotes" rows="2" placeholder="体感、伤情、天气影响…"></textarea></div>`;
+      box.innerHTML = html;
+      if (MANUAL_BLOCK_TYPES.indexOf(type) >= 0) {
+        if (!manualSegs.length) {
+          const def = type === '节奏跑' ? '20min×2' : (type === '变速跑' ? '1km×8' : '400m×8');
+          manualSegs = [{ spec: def, target: '', paces: '', rest: '', hr: '' }];
+        }
+        mRenderSegs();
+      } else {
+        manualSegs = [];
+      }
+      mRenderCustoms();
+    }
+    function mCalc(el, src) {
+      const dEl = document.getElementById('mDistance');
+      const tEl = document.getElementById('mDuration');
+      const pEl = document.getElementById('mPace');
+      if (!dEl || !tEl || !pEl) return;
+      const dist = mNum(dEl.value), dur = mParseMin(tEl.value), pace = mParsePace(pEl.value);
+      if (src === 'distance') {
+        if (dist > 0 && dur > 0) pEl.value = mPaceStr(dur / dist);
+        else if (dist > 0 && pace > 0) tEl.value = String(Math.round(dist * pace * 10) / 10);
+      } else if (src === 'duration') {
+        if (dist > 0 && dur > 0) pEl.value = mPaceStr(dur / dist);
+        else if (dur > 0 && pace > 0) dEl.value = String(Math.round(dur / pace * 100) / 100);
+      } else {
+        if (pace > 0 && dist > 0) tEl.value = String(Math.round(dist * pace * 10) / 10);
+        else if (pace > 0 && dur > 0) dEl.value = String(Math.round(dur / pace * 100) / 100);
+      }
+    }
+    function mLongHint() {
+      const el = document.getElementById('mLongHint');
+      if (!el) return;
+      const ps = mParsePace(document.getElementById('mPaceStart').value);
+      const pe = mParsePace(document.getElementById('mPaceEnd').value);
+      const carb = mNum(document.getElementById('mCarb').value);
+      const feeds = mNum(document.getElementById('mFeeds').value);
+      const dur = mParseMin((document.getElementById('mDuration') || {}).value);
+      const arr = [];
+      if (ps && pe) {
+        const d = pe - ps;
+        arr.push(d < 0 ? `末段快 ${Math.round(-d * 60)}″（负分割）` : d > 0 ? `末段慢 ${Math.round(d * 60)}″（掉速）` : '起末同速');
+      }
+      if (carb && dur) arr.push(`碳水约 ${Math.round(carb * dur / 60)}g（${carb}g/h）`);
+      if (feeds) arr.push(`补给 ${feeds} 次`);
+      el.innerHTML = arr.length ? '⚙ ' + arr.join(' · ') : '选填：填起/末配速可自动判断负分割；填碳水+时长自动算总克数。';
+    }
+    function mRenderSegs() {
+      const box = document.getElementById('mSegList');
+      if (!box) return;
+      box.innerHTML = manualSegs.map((sg, i) => `
+        <div class="mm-seg" data-i="${i}">
+          <div class="mm-seg-head">
+            <input class="form-input" data-f="spec" value="${mEsc(sg.spec)}" placeholder="组块：4k×2 / 400m×8 / 20min×2" oninput="mSegSet(${i},'spec',this.value)">
+            <button type="button" class="mm-del" title="删除这一组" onclick="mDelSeg(${i})">×</button>
+          </div>
+          <div class="mm-grid2" style="margin-top:8px">
+            <div class="form-group"><label class="form-label">目标配速</label><input class="form-input" data-f="target" value="${mEsc(sg.target)}" placeholder="如 3:58–4:02" oninput="mSegSet(${i},'target',this.value)"></div>
+            <div class="form-group"><label class="form-label">实际配速（逐组）</label><input class="form-input" data-f="paces" value="${mEsc(sg.paces)}" placeholder="3:59/3:57；只填一个也行" oninput="mSegSet(${i},'paces',this.value)"></div>
+          </div>
+          <div class="mm-grid2" style="margin-top:8px">
+            <div class="form-group"><label class="form-label">组间休息</label><input class="form-input" data-f="rest" value="${mEsc(sg.rest)}" placeholder="如 3min 慢跑" oninput="mSegSet(${i},'rest',this.value)"></div>
+            <div class="form-group"><label class="form-label">组内平均心率</label><input class="form-input" data-f="hr" value="${mEsc(sg.hr)}" placeholder="如 158" oninput="mSegSet(${i},'hr',this.value)"></div>
+          </div>
+          <div class="mm-hint" id="mSegCalc${i}"></div>
+        </div>`).join('');
+      mSegRefresh();
+    }
+    function mSegSet(i, f, v) { if (manualSegs[i]) { manualSegs[i][f] = v; mSegRefresh(); } }
+    function mAddSeg(spec, paces, rest, hr) {
+      manualSegs.push({ spec: spec || '', target: '', paces: paces || '', rest: rest || '', hr: hr || '' });
+      mRenderSegs();
+    }
+    function mDelSeg(i) {
+      manualSegs.splice(i, 1);
+      if (!manualSegs.length) manualSegs = [{ spec: '', target: '', paces: '', rest: '', hr: '' }];
+      mRenderSegs();
+    }
+    function mSegRefresh() {
+      const t = mSegCalc();
+      manualSegs.forEach((sg, i) => {
+        const el = document.getElementById('mSegCalc' + i);
+        if (!el || !sg._calc) return;
+        const c = sg._calc;
+        const bits = [];
+        if (c.km) bits.push(`${mRound2(c.km)}km`);
+        if (c.min) bits.push(fmtDur(Math.round(c.min)));
+        if (c.avgPace) bits.push(`均配 ${mPaceStr(c.avgPace)}`);
+        if (c.rest && c.reps > 1) bits.push(`休息约 ${Math.round(c.rest * (c.reps - 1))}min`);
+        el.innerHTML = bits.length ? '⚙ ' + bits.join(' · ') : '⚙ 填组块（如 4k×2）和配速，自动算距离/时间';
+      });
+      const sum = document.getElementById('mSegSum');
+      if (!sum) return;
+      const warmKm = mNum((document.getElementById('mWarmKm') || {}).value);
+      const warmMin = mParseMin((document.getElementById('mWarmMin') || {}).value);
+      const extraKm = mNum((document.getElementById('mExtraKm') || {}).value);
+      const totalKm = t.hardKm + warmKm + extraKm;
+      const totalMin = t.hardMin + t.restMin + warmMin;
+      let html = `硬段合计 <b>${mRound2(t.hardKm)} km</b> · <b>${fmtDur(Math.round(t.hardMin)) || '—'}</b>`;
+      if (t.restMin) html += ` · 组间休息约 ${Math.round(t.restMin)}min`;
+      if (warmKm) html += ` · 热身/放松 ${mRound2(warmKm)}km`;
+      if (t.hardKm && t.hardMin) html += ` · 硬段配速 ${mPaceStr(t.hardMin / t.hardKm)}`;
+      html += `<br>总跑量（含热身/额外）<b>${mRound2(totalKm)} km</b> · 总时长 <b>${fmtDur(Math.round(totalMin)) || '—'}</b>`;
+      const fl = mFirstLastDiff();
+      if (fl) {
+        const d = Math.round(fl.diff * 60);
+        html += `<br>首末组差：<b>${d > 0 ? '+' + d + '″（末组慢）' : d < 0 ? d + '″（末组快）' : '0″'}</b>`;
+      }
+      sum.innerHTML = html;
+    }
+    function mRenderCustoms() {
+      const box = document.getElementById('mCustomList');
+      if (!box) return;
+      box.innerHTML = manualCustoms.map((c, i) => `
+        <div class="mm-grid2" style="margin-top:6px">
+          <input class="form-input" value="${mEsc(c.k)}" placeholder="项目，如 跑鞋" oninput="mCustomSet(${i},'k',this.value)">
+          <div style="display:flex;gap:6px">
+            <input class="form-input" value="${mEsc(c.v)}" placeholder="值，如 adios Pro 3" oninput="mCustomSet(${i},'v',this.value)">
+            <button type="button" class="mm-del" style="margin-top:2px" onclick="mDelCustom(${i})">×</button>
+          </div>
+        </div>`).join('');
+    }
+    function mAddCustom() { manualCustoms.push({ k: '', v: '' }); mRenderCustoms(); }
+    function mDelCustom(i) { manualCustoms.splice(i, 1); mRenderCustoms(); }
+    function mCustomSet(i, f, v) { if (manualCustoms[i]) manualCustoms[i][f] = v; }
+    function mPlanHint(date) {
+      const el = document.getElementById('mPlanHint');
+      if (!el) return;
+      let raw = '';
+      try { const plan = getPlanForDate(date); raw = plan && plan.raw ? plan.raw : ''; } catch (e) {}
+      el.innerHTML = raw ? `<div class="mm-plan">📋 当日课表：${mEsc(raw)}</div>` : '';
+    }
+    function mSetVal(id, v) { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; }
+    function mSetSelectByText(id, v) {
+      const el = document.getElementById(id);
+      if (!el || !v) return;
+      const opt = Array.prototype.find.call(el.options, o => o.text === v || o.value === v);
+      if (opt) el.value = opt.value;
+    }
+    // 预填：从现有记录（编辑）
+    function mFillFromRecord(rec) {
+      mSetVal('mWeather', rec.weather || '');
+      mSetVal('mRpe', rec.rpe || 3);
+      mSetVal('mCompletion', rec.completion || '按计划完成');
+      mSetVal('mNotes', rec.notes || '');
+      mSetVal('mHr', rec.hr || '');
+      mSetVal('mHrMax', rec.hrMax || '');
+      mSetVal('mHrCeil', rec.hrCeil || '');
+      mSetSelectByText('mTalk', rec.talk || '');
+      if (MANUAL_BLOCK_TYPES.indexOf(rec.type) >= 0) {
+        mSetVal('mWarmKm', rec.warmupKm || '');
+        mSetVal('mExtraKm', rec.extraRunKm || '');
+        manualSegs = (rec.segments && rec.segments.length)
+          ? rec.segments.map(s => ({ spec: s.spec || '', target: s.target || '', paces: s.paces || '', rest: s.rest || '', hr: s.hr || '' }))
+          : [];
+        if (!manualSegs.length) {
+          const dist = mNum(rec.distance), dur = mNum(rec.duration), pace = dist && dur ? dur / dist : 0;
+          manualSegs = [{ spec: dist ? `${mRound2(dist)}km×1` : '', target: '', paces: pace ? mPaceStr(pace) : '', rest: '', hr: rec.hr || '' }];
+        }
+        mRenderSegs();
+      } else if (rec.type === '长跑') {
+        mSetVal('mDistance', rec.distance || '');
+        mSetVal('mDuration', rec.duration || '');
+        mSetVal('mPace', rec.pace ? mPaceStr(mNum(rec.pace)) : '');
+        mSetSelectByText('mLongMode', rec.longMode || '匀速');
+        mSetVal('mCarb', rec.carbPerHour || '');
+        mSetVal('mFeeds', rec.feeds || '');
+        mSetSelectByText('mGut', rec.gut || '');
+        mSetVal('mPaceStart', rec.paceStart || '');
+        mSetVal('mPaceEnd', rec.paceEnd || '');
+        mLongHint();
+      } else if (rec.type === '力量训练') {
+        mSetVal('mStrengthMin', rec.strengthDuration || rec.duration || '');
+        mSetVal('mContent', rec.extra || '');
+      } else if (rec.type === '交叉训练') {
+        mSetVal('mStrengthMin', rec.duration || '');
+        mSetVal('mDistance', rec.distance || '');
+        mSetSelectByText('mCrossType', rec.crossType || '骑行');
+      } else if (rec.type === '热身/冷身') {
+        mSetVal('mDistance', rec.distance || '');
+        mSetVal('mDuration', rec.duration || '');
+      } else if (rec.type === 'E跑') {
+        mSetVal('mDistance', rec.distance || '');
+        mSetVal('mDuration', rec.duration || '');
+        mSetVal('mPace', rec.pace ? mPaceStr(mNum(rec.pace)) : '');
+        mSetVal('mHrCeil', rec.hrCeil || '');
+        mSetSelectByText('mTalk', rec.talk || '');
+      }
+      manualCustoms = (rec.custom || []).map(c => ({ k: c.k || '', v: c.v || '' }));
+      mRenderCustoms();
+    }
+    // 预填：从页面表单（识别 / 同步后的草稿）
+    function mFillFromForm(type) {
+      const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+      const dist = mNum(g('trainingDistance')), dur = mNum(g('trainingDuration')), hr = g('trainingHr');
+      if (MANUAL_BLOCK_TYPES.indexOf(type) >= 0) {
+        mSetVal('mWarmKm', g('warmupKm') || '');
+        mSetVal('mExtraKm', g('extraRunKm') || '');
+        mSetVal('mHr', hr || '');
+        if (dist || dur) {
+          const pace = dist && dur ? dur / dist : 0;
+          manualSegs = [{ spec: dist ? `${mRound2(dist)}km×1` : '', target: '', paces: pace ? mPaceStr(pace) : '', rest: '', hr: hr || '' }];
+          mRenderSegs();
+        }
+      } else if (type === '长跑' || type === 'E跑' || type === '热身/冷身') {
+        mSetVal('mDistance', dist || '');
+        mSetVal('mDuration', dur || '');
+        if (dist && dur) mSetVal('mPace', mPaceStr(dur / dist));
+      } else if (type === '力量训练' || type === '交叉训练') {
+        mSetVal('mStrengthMin', g('strengthDuration') || '');
+        mSetVal('mContent', g('trainingExtra') || '');
+        mSetVal('mHr', hr || g('strengthHr') || '');
+      }
+      mSetVal('mHrMax', '');
+      mSetSelectByText('mWeather', g('trainingWeather'));
+      mSetVal('mRpe', g('trainingRpe') || 3);
+      mSetSelectByText('mCompletion', g('trainingCompletion') || '按计划完成');
+      mSetVal('mNotes', g('trainingNotes') || '');
+      if (MANUAL_BLOCK_TYPES.indexOf(type) >= 0) mSegRefresh();
+    }
+    function openManualRecord(recordId) {
+      const rec = recordId ? loadFromStorage('training').find(t => t.id === recordId) : null;
+      manualEditId = rec ? rec.id : null;
+      manualSegs = [];
+      manualCustoms = [];
+      manualRenderTypeOptions();
+      const date = (rec && rec.date) || getRecordDate();
+      mSetVal('mDate', date);
+      mPlanHint(date);
+      let type = (rec && rec.type) || '';
+      if (MANUAL_TYPES.indexOf(type) < 0) {
+        const hiddenType = (document.getElementById('trainingType') || {}).value || '';
+        let planType = '';
+        try { const p = getPlanForDate(date); planType = (p && p.types && p.types[0]) || ''; } catch (e) {}
+        type = MANUAL_TYPES.indexOf(hiddenType) >= 0 ? hiddenType : planType;
+        if (MANUAL_TYPES.indexOf(type) < 0) type = 'E跑';
+      }
+      mSetVal('mType', type);
+      mRenderTypeFields(type);
+      if (rec) mFillFromRecord(rec); else mFillFromForm(type);
+      document.getElementById('manualModal').style.display = 'block';
+      document.body.style.overflow = 'hidden';
+    }
+    function closeManualRecord() {
+      const m = document.getElementById('manualModal');
+      if (m) m.style.display = 'none';
+      document.body.style.overflow = '';
+      manualEditId = null;
+    }
+    // 保存后清掉页面表单里的识别草稿，避免再点表单保存造成重复
+    function mClearDraftForm() {
+      ['trainingType', 'trainingDistance', 'trainingDuration', 'trainingHr', 'trainingWeather', 'trainingNotes', 'trainingExtra',
+       'strengthDuration', 'strengthHr', 'warmupKm', 'extraRunKm'].forEach(id => mSetVal(id, ''));
+      mSetVal('trainingRpe', 3);
+      const rv = document.getElementById('rpeValue'); if (rv) rv.textContent = '3';
+      mSetVal('trainingCompletion', '按计划完成');
+      const eb = document.getElementById('editBanner'); if (eb) eb.style.display = 'none';
+      editingRecordId = null;
+      if (typeof renderAutoSummary === 'function') renderAutoSummary();
+    }
+    function saveManualRecord() {
+      const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+      const date = gv('mDate') || getDateStr();
+      const type = gv('mType') || 'E跑';
+      const noteRaw = String(gv('mNotes') || '').trim();
+      const wasEdit = !!manualEditId;
+      const rec = {
+        id: manualEditId || generateId(), date: date, type: type,
+        distance: 0, duration: 0, pace: 0, hr: null, hrMax: null,
+        rpe: parseInt(gv('mRpe'), 10) || 3,
+        completion: gv('mCompletion') || '按计划完成',
+        weather: gv('mWeather') || '',
+        extra: '', strengthDuration: 0, strengthHr: null,
+        warmupKm: 0, extraRunKm: 0, notes: '', manual: true
+      };
+      const auto = [];
+      if (MANUAL_BLOCK_TYPES.indexOf(type) >= 0) {
+        const segs = manualSegs.filter(s => String(s.spec || '').trim() || String(s.paces || '').trim());
+        if (!segs.length) { showToast('先填组块（如 4k×2）和配速', 'error'); return; }
+        const t = mSegCalc();
+        rec.distance = mRound2(t.hardKm);
+        rec.duration = Math.round(t.hardMin + t.restMin);
+        rec.warmupKm = mRound2(mNum(gv('mWarmKm')));
+        rec.extraRunKm = mRound2(mNum(gv('mExtraKm')));
+        const warmMin = mParseMin(gv('mWarmMin'));
+        if (warmMin) rec.duration += Math.round(warmMin);
+        rec.hr = parseInt(gv('mHr'), 10) || null;
+        rec.hrMax = parseInt(gv('mHrMax'), 10) || null;
+        rec.segments = segs.map(s => {
+          const spec = mParseSpec(s.spec);
+          const paces = mParsePaceList(s.paces);
+          const avg = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 0;
+          return {
+            spec: String(s.spec || '').trim(), target: String(s.target || '').trim(), paces: String(s.paces || '').trim(),
+            rest: String(s.rest || '').trim(), hr: parseInt(s.hr, 10) || null,
+            reps: spec.reps, unit: spec.distKm ? 'km' : (spec.timeMin ? 'min' : ''), perRep: spec.distKm || spec.timeMin || 0,
+            avgPaceSec: avg ? Math.round(avg * 60) : 0
+          };
+        });
+        if (!rec.distance) { showToast('组块里至少要有一组能算出距离（填配速或距离）', 'error'); return; }
+        rec.pace = Number((rec.duration / rec.distance).toFixed(2));
+        auto.push(`${type}：` + segs.map(s => {
+          const p = mParsePaceList(s.paces);
+          const avg = p.length ? mPaceStr(p.reduce((a, b) => a + b, 0) / p.length) : '';
+          return `${String(s.spec || '').trim().replace(/\s+/g, '')}${avg ? ' @' + avg : ''}${s.target ? '（目标' + String(s.target).trim() + '）' : ''}`;
+        }).join(' ｜ '));
+        const fl = mFirstLastDiff();
+        if (fl) { const d = Math.round(fl.diff * 60); auto.push(d > 0 ? `首末组慢 ${d}″` : d < 0 ? `首末组快 ${-d}″` : '首末组同速'); }
+        auto.push(`硬段 ${mRound2(t.hardKm)}km / ${fmtDur(Math.round(t.hardMin)) || '—'}`);
+        if (t.restMin) auto.push(`组间休息约 ${Math.round(t.restMin)}min`);
+        if (rec.warmupKm) auto.push(`热身/放松 ${rec.warmupKm}km`);
+        if (rec.extraRunKm) auto.push(`额外跑量 ${rec.extraRunKm}km`);
+        if (rec.hr) auto.push(`均心率${rec.hr}` + (rec.hrMax ? `（最大${rec.hrMax}）` : ''));
+      } else if (type === '长跑') {
+        const dist = mNum(gv('mDistance')), dur = mParseMin(gv('mDuration')), pace = mParsePace(gv('mPace'));
+        rec.distance = mRound2(dist);
+        rec.duration = Math.round(dur || (dist && pace ? dist * pace : 0));
+        rec.pace = rec.distance ? Number((rec.duration / rec.distance).toFixed(2)) : 0;
+        rec.hr = parseInt(gv('mHr'), 10) || null;
+        rec.hrMax = parseInt(gv('mHrMax'), 10) || null;
+        rec.longMode = gv('mLongMode') || '匀速';
+        rec.carbPerHour = mNum(gv('mCarb')) || null;
+        rec.feeds = mNum(gv('mFeeds')) || null;
+        rec.gut = gv('mGut') || '';
+        rec.paceStart = String(gv('mPaceStart') || '').trim();
+        rec.paceEnd = String(gv('mPaceEnd') || '').trim();
+        if (!rec.distance && !rec.duration) { showToast('至少填距离或时长', 'error'); return; }
+        auto.push(`长跑：${rec.longMode}`);
+        if (rec.paceStart || rec.paceEnd) auto.push(`起 ${rec.paceStart || '-'} → 末 ${rec.paceEnd || '-'}`);
+        if (rec.carbPerHour) auto.push(`碳水 ${rec.carbPerHour}g/h` + (rec.duration ? `（约${Math.round(rec.carbPerHour * rec.duration / 60)}g）` : ''));
+        if (rec.feeds) auto.push(`补给 ${rec.feeds} 次`);
+        if (rec.gut) auto.push(`肠胃 ${rec.gut}`);
+        if (rec.hr) auto.push(`均心率${rec.hr}` + (rec.hrMax ? `（最大${rec.hrMax}）` : ''));
+      } else if (type === 'E跑') {
+        const dist = mNum(gv('mDistance')), dur = mParseMin(gv('mDuration')), pace = mParsePace(gv('mPace'));
+        rec.distance = mRound2(dist);
+        rec.duration = Math.round(dur || (dist && pace ? dist * pace : 0));
+        rec.pace = rec.distance ? Number((rec.duration / rec.distance).toFixed(2)) : 0;
+        rec.hr = parseInt(gv('mHr'), 10) || null;
+        rec.hrMax = parseInt(gv('mHrMax'), 10) || null;
+        rec.hrCeil = parseInt(gv('mHrCeil'), 10) || null;
+        rec.talk = gv('mTalk') || '';
+        if (!rec.distance && !rec.duration) { showToast('至少填距离或时长', 'error'); return; }
+        auto.push('E跑（轻松/恢复）');
+        if (rec.hrCeil) auto.push(`心率上限 ${rec.hrCeil}`);
+        if (rec.hr) auto.push(`均心率${rec.hr}` + (rec.hrMax ? `（最大${rec.hrMax}）` : ''));
+        if (rec.talk) auto.push(`能聊天：${rec.talk}`);
+      } else if (type === '力量训练') {
+        rec.strengthDuration = Math.round(mNum(gv('mStrengthMin')));
+        rec.duration = 0;
+        rec.strengthHr = parseInt(gv('mHr'), 10) || null;
+        rec.hr = rec.strengthHr;
+        rec.extra = String(gv('mContent') || '').trim();
+        if (!rec.strengthDuration && !rec.extra) { showToast('填力量时长或内容', 'error'); return; }
+        auto.push('力量训练 ' + (rec.strengthDuration || '') + 'min');
+        if (rec.extra) auto.push(rec.extra);
+      } else if (type === '交叉训练') {
+        rec.duration = Math.round(mNum(gv('mStrengthMin')));
+        rec.distance = mRound2(mNum(gv('mDistance')));
+        rec.pace = rec.distance && rec.duration ? Number((rec.duration / rec.distance).toFixed(2)) : 0;
+        rec.hr = parseInt(gv('mHr'), 10) || null;
+        rec.crossType = gv('mCrossType') || '交叉训练';
+        rec.extra = rec.crossType;
+        if (!rec.duration) { showToast('填交叉训练时长', 'error'); return; }
+        auto.push(`${rec.crossType} ${rec.duration}min` + (rec.distance ? ` ${rec.distance}km` : ''));
+      } else if (type === '热身/冷身') {
+        rec.distance = mRound2(mNum(gv('mDistance')));
+        rec.duration = Math.round(mParseMin(gv('mDuration')));
+        rec.pace = rec.distance && rec.duration ? Number((rec.duration / rec.distance).toFixed(2)) : 0;
+        if (!rec.distance && !rec.duration) { showToast('填距离或时长', 'error'); return; }
+        auto.push('热身/冷身');
+      } else {
+        if (!noteRaw) { showToast('休息日填一句备注即可', 'error'); return; }
+        auto.push('休息日');
+      }
+      const customs = manualCustoms.filter(c => String(c.k || '').trim() || String(c.v || '').trim());
+      rec.custom = customs.map(c => ({ k: String(c.k || '').trim(), v: String(c.v || '').trim() }));
+      const customText = rec.custom.map(c => `${c.k || '备注'}：${c.v || ''}`).join('；');
+      rec.notes = [auto.join('；'), customText, noteRaw].filter(Boolean).join('\n');
+      const arr = loadFromStorage('training');
+      if (manualEditId) {
+        const i = arr.findIndex(t => t.id === manualEditId);
+        if (i >= 0) arr[i] = Object.assign({}, arr[i], rec); else arr.push(rec);
+      } else {
+        arr.push(rec);
+      }
+      saveToStorage('training', arr);
+      mClearDraftForm();
+      manualEditId = null;
+      closeManualRecord();
+      if (date !== getRecordDate()) { setRecordDate(date); }
+      else { loadTodayData(date); renderDayRecords(date); loadWeekPlan(); renderDayPlan(date); }
+      const wkTab = document.getElementById('tab-weekly');
+      if (wkTab && wkTab.classList.contains('active')) renderWeekly(weeklyOffset);
+      if (typeof coachAfterSave === 'function') coachAfterSave(type, rec.distance, rec.duration, date);
+      showToast((wasEdit ? '已更新记录：' : '已保存记录：') + type, 'success');
     }
 
     // —— 开屏自动同步：手表数据静默入库（COROS / 佳明，双表自动去重） ——
